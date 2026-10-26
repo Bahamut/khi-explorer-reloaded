@@ -7,18 +7,18 @@
 [![License](https://img.shields.io/github/license/madLinux7/khi-explorer?style=flat-square)](https://github.com/madLinux7/khi-explorer/blob/main/LICENSE)
 
 A polished standalone browser, player and bulk downloader for [KHInsider](https://downloads.khinsider.com).
+YES, it can download entire album lists, **including the album art**, separated by folders and even **bulk download a full albums list from any publisher**.
+Working in October/November 2026.
 
 ![Showcase](https://artifacts.grolmes.com/khi-explorer/demo.gif)
-
-YES, you can download entire albums with this, including the album art, separated by folders and even bulk download a full albums list.
 
 ## Features
 
 - **Interactive TUI** — Search for OST, filter tracks and navigate with keyboard-only controls
 - **Audio Playback** — Stream playback right from your terminal
-- **Bulk Downloads** — Download individual tracks or entire albums by pressing **D** on the entry
+- **Bulk Downloads** — Download individual tracks or entire albums by pressing **D** on the entry, it also supports BULK downloads for all the albums in the list or from a publisher.
 - **Search & Filter** — Find games and tracks quickly with fuzzy search
-- **Quick Format Switch** — Toggle FLAC/MP3 inside the app by pressing TAB
+- **Quick Format Switch** — Toggle FLAC/MP3 inside the app by pressing TAB. Toggle Album Art downloads by pressing I.
 - **Configurable** — Set your preferred format and download path in `~/.khi_explorer.yaml`
 - **Cross-platform** — Use on Linux, macOS and Windows
 
