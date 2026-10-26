@@ -10,7 +10,9 @@ A polished standalone browser, player and bulk downloader for [KHInsider](https:
 YES, it can download entire album lists, **including the album art**, separated by folders and even **bulk download a full albums list from any publisher**.
 Working in October/November 2026.
 
-<img src="https://artifacts.grolmes.com/khi-explorer/demo.gif" align="center" alt="Showcase" width="450" />
+<p align="center">
+  <img src="https://artifacts.grolmes.com/khi-explorer/demo.gif" alt="Showcase" width="60%" />
+</p>
 
 ## Features
 
