@@ -20,8 +20,8 @@ Fully working since October 2026.
 - **Bulk Downloads** — Download individual tracks or entire albums. Supports BULK download ALL the albums in the list or from a Publisher.
 - **Search & Filter** — Find games and tracks quickly with fuzzy search, supporting search by Publisher or by OST.
 - **Audio Playback** — Stream playback right from your terminal.
-- **Quick Format Switch** — Toggle FLAC/MP3 inside the app by pressing TAB.
-- **Quick Images Toggle** — Toggle Album Art downloads by pressing I.
+- **Quick Format Switch** — Toggle between FLAC/MP3 inside the app.
+- **Quick Images Toggle** — Toggle Album Art downloads.
 - **Configurable** — Set your preferred format and download path in `~/.khi_explorer.yaml`
 - **Cross-platform** — Use on Linux, macOS and Windows.
 .¡
