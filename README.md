@@ -18,9 +18,10 @@ Fully working since October 2026.
 
 - **Interactive TUI** — Search for OST, filter tracks and navigate with keyboard-only controls
 - **Audio Playback** — Stream playback right from your terminal
-- **Bulk Downloads** — Download individual tracks or entire albums by pressing **D** on the entry, it also supports BULK downloads for all the albums in the list or from a publisher.
-- **Search & Filter** — Find games and tracks quickly with fuzzy search
-- **Quick Format Switch** — Toggle FLAC/MP3 inside the app by pressing TAB. Toggle Album Art downloads by pressing I.
+- **Bulk Downloads** — Download individual tracks or entire albums by pressing **D** on the entry, it also supports BULK downloads for all the albums in the list or from a publisher by pressing **A**.
+- **Search & Filter** — Find games and tracks quickly with fuzzy search, supporting search by Publisher or by OST.
+- **Quick Format Switch** — Toggle FLAC/MP3 inside the app by pressing TAB.
+- **Quick Images Toggle** — Toggle Album Art downloads by pressing I.
 - **Configurable** — Set your preferred format and download path in `~/.khi_explorer.yaml`
 - **Cross-platform** — Use on Linux, macOS and Windows
 
@@ -34,7 +35,7 @@ khi-explorer
 
 | Key | Action |
 |-----|--------|
-| `F2` | Change search mode: Toggle Between OST search or Publisher |
+| `F2` | Change search mode: Toggle between OST & Publisher search modes |
 | `↑` / `↓` or `k` / `j` | Move selection cursor up/down |
 | `←` / `→` | Previous/Next page |
 | `Enter` | Select album, search, or play song |
@@ -50,7 +51,7 @@ khi-explorer
 | `D` | Queue highlighted song for download (Album view) |
 | `D` | Queue one album for download (Search results view) |
 | `A` | Queue all the albums in the list for download (OST album list or Publisher album list) |
-| `I` | Toggle Album art downloading ON/OFF |
+| `I` | Toggle Album Art downloading ON/OFF |
 
 ### Playback Controls
 
@@ -65,7 +66,7 @@ Configuration is stored at `~/.khi_explorer.yaml`:
 
 ```yaml
 format: flac                         # Download format (flac, mp3)
-download_path: ~/khi_explorer        # Download destination (default windows folder is the Downloads folder)
+download_path: ~/khi_explorer        # Download destination (default: Downloads folder on Windows)
 player: mpv                          # Audio player command
 ```
 
