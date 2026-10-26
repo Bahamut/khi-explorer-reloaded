@@ -10,7 +10,7 @@ A polished standalone browser, player and bulk downloader for [KHInsider](https:
 YES, it can download entire album lists, **including the album art**, separated by folders and even **bulk download a full albums list from any publisher**.
 Working in October/November 2026.
 
-![Showcase](https://artifacts.grolmes.com/khi-explorer/demo.gif)
+<img src="https://artifacts.grolmes.com/khi-explorer/demo.gif" align="center" alt="Showcase" width="450" />
 
 ## Features
 
@@ -28,7 +28,7 @@ Working in October/November 2026.
 khi-explorer
 ```
 
-### TUI Navigation
+### Navigation
 
 | Key | Action |
 |-----|--------|
@@ -41,13 +41,6 @@ khi-explorer
 | `Tab` | Toggle download format (FLAC ⇆ MP3) |
 | `q` / `Ctrl+C` | Quit |
 
-### Playback Controls
-
-| Key | Action |
-|-----|--------|
-| `P` | Pause or resume playback |
-| `S` | Stop playback |
-
 ### Download Controls
 
 | Key | Action |
@@ -56,6 +49,13 @@ khi-explorer
 | `D` | Queue one album for download (Search results view) |
 | `A` | Queue all the albums in the list for download (OST album list or Publisher album list) |
 | `I` | Toggle Album art downloading ON/OFF |
+
+### Playback Controls
+
+| Key | Action |
+|-----|--------|
+| `P` | Pause or resume playback |
+| `S` | Stop playback |
 
 ### Configuration
 
