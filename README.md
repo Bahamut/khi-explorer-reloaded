@@ -8,8 +8,8 @@
 
 A polished standalone browser, player and bulk downloader for [KHInsider](https://downloads.khinsider.com).
 YES, it can download entire album lists, **including the album art**, separated by folders and even **bulk download a full albums list from any publisher**.
-
 Fully working since October 2026.
+
 
 
 <p align="center">
