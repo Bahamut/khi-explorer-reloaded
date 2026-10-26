@@ -80,6 +80,6 @@ go build -o khi-explorer .
 ## ✨ Acknowledgements ✨
 
 - [KHInsider](https://www.khinsider.com) — For hosting such an extensive collection of video game music
+- [madLinux7/khi-explorer](https://github.com/madLinux7/khi-explorer) — This project is a fork of his original khi-explorer mad work!!
 - [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) — For the elegant TUI framework
 - [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) — For beautiful styling primitives
-- "This project is based on the original work from [madLinux7](https://github.com/madLinux7/khi-explorer)."
