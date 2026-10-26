@@ -6,8 +6,8 @@
 [![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue?style=flat-square)](https://github.com/madLinux7/khi-explorer)
 [![License](https://img.shields.io/github/license/madLinux7/khi-explorer?style=flat-square)](https://github.com/madLinux7/khi-explorer/blob/main/LICENSE)
 
-A polished standalone browser, player and bulk downloader for [KHInsider](https://downloads.khinsider.com).
-YES, it can download entire album lists, **including the album art**, separated by folders and even **bulk download a full albums list from any publisher**.
+Standalone browser, player and bulk downloader for [KHInsider](https://downloads.khinsider.com).
+It CAN download entire album lists, **including the album art**, separated by folders and even **bulk download a full albums list from any publisher**.
 Fully working since October 2026.
 
 <p align="center">
