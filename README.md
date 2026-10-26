@@ -18,7 +18,7 @@ Fully working since October 2026.
 
 - **Interactive TUI** — Search for OST, filter tracks and navigate with keyboard-only controls
 - **Audio Playback** — Stream playback right from your terminal
-- **Bulk Downloads** — Download individual tracks or entire albums. Supporting BULK downloads for all the albums in the list or from a Publisher.
+- **Bulk Downloads** — Download individual tracks or entire albums. Supports BULK download ALL the albums in the list or from a Publisher.
 - **Search & Filter** — Find games and tracks quickly with fuzzy search, supporting search by Publisher or by OST.
 - **Quick Format Switch** — Toggle FLAC/MP3 inside the app by pressing TAB.
 - **Quick Images Toggle** — Toggle Album Art downloads by pressing I.
