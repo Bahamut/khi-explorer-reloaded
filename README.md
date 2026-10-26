@@ -1,4 +1,4 @@
-# khi-explorer
+# khi-explorer-reloaded
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/madLinux7/khi-explorer?style=flat-square)](https://go.dev/)
 [![Release](https://img.shields.io/github/v/release/madLinux7/khi-explorer?style=flat-square)](https://github.com/madLinux7/khi-explorer/releases)
@@ -9,8 +9,6 @@
 A polished standalone browser, player and bulk downloader for [KHInsider](https://downloads.khinsider.com).
 YES, it can download entire album lists, **including the album art**, separated by folders and even **bulk download a full albums list from any publisher**.
 Fully working since October 2026.
-
-
 
 <p align="center">
   <img src="https://artifacts.grolmes.com/khi-explorer/demo.gif" alt="Showcase" width="60%" />
