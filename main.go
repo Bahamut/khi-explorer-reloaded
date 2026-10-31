@@ -56,6 +56,7 @@ TUI Navigation Controls:
   Enter           Select album, search, or play song
   Esc/Backspace   Go back to the previous view
   /               Filter lists
+  F2              Switch search mode (OST or publisher)
   ctrl+c, q       Quit the application
 
 TUI Playback Controls (while playing a song):
@@ -65,10 +66,12 @@ TUI Playback Controls (while playing a song):
 TUI Download Controls:
   D               Queue highlighted song for download (in Album view)
   D               Queue entire album for download (in Search results view)
+  A               Queue every album in the current results
+  I               Toggle album-image downloads (outside the search field)
 
 Configuration:
   Settings path:  ~/.khi_explorer.yaml
-  Music folder:   ~/Music/khi_explorer/
+  Music folder:   ~/Downloads/khi_explorer/ (Windows default)
 `, Version)
 	fmt.Print(helpText)
 }

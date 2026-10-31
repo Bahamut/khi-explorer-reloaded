@@ -5,3 +5,5 @@
 *.ps1
 *.sh
 khi-explorer
+.tools/
+dist/

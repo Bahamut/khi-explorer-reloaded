@@ -43,16 +43,26 @@ type state int
 
 const (
 	stateSearch state = iota
+	statePublisherList
 	stateAlbumList
 	stateSongList
 	stateLoading
 )
 
+type searchMode int
+
+const (
+	searchModeOST searchMode = iota
+	searchModePublisher
+)
+
 type downloadTask struct {
-	url        string
-	albumTitle string
-	isSong     bool
-	song       client.Song
+	url          string
+	albumTitle   string
+	albumYear    string
+	publisherDir string
+	isSong       bool
+	song         client.Song
 }
 
 type mainModel struct {
@@ -61,14 +71,17 @@ type mainModel struct {
 	client     *client.Client
 	downloader *downloader.Downloader
 
-	searchInput textinput.Model
-	albumList   list.Model
-	songList    list.Model
-	progressBar progress.Model
+	searchInput   textinput.Model
+	searchMode    searchMode
+	publisherList list.Model
+	albumList     list.Model
+	songList      list.Model
+	progressBar   progress.Model
 
-	currentAlbum client.AlbumDetails
-	loadingMsg   string
-	err          error
+	currentAlbum     client.AlbumDetails
+	currentPublisher string
+	loadingMsg       string
+	err              error
 
 	player       *exec.Cmd
 	downloadChan chan downloader.DownloadProgress
@@ -109,6 +122,16 @@ func NewMainModel(cfg config.Config) mainModel {
 	ali.KeyMap.Filter.SetKeys()
 	ali.KeyMap.ClearFilter.SetKeys()
 
+	pli := list.New([]list.Item{}, d, 0, 0)
+	pli.SetShowTitle(false)
+	pli.SetShowStatusBar(true)
+	pli.KeyMap.AcceptWhileFiltering.SetHelp("Enter ↵", "apply filter")
+	pli.KeyMap.CancelWhileFiltering.SetHelp("Esc", "cancel")
+	pli.KeyMap.NextPage.SetKeys("pgdown", "right")
+	pli.KeyMap.PrevPage.SetKeys("pgup", "left")
+	pli.KeyMap.Filter.SetKeys()
+	pli.KeyMap.ClearFilter.SetKeys()
+
 	sli := list.New([]list.Item{}, d, 0, 0)
 	sli.SetShowTitle(false)
 	sli.SetShowStatusBar(true)
@@ -126,16 +149,17 @@ func NewMainModel(cfg config.Config) mainModel {
 
 	c := client.NewClient()
 	m := mainModel{
-		state:        stateSearch,
-		config:       cfg,
-		client:       c,
-		downloader:   downloader.NewDownloader(c, cfg),
-		searchInput:  sip,
-		albumList:    ali,
-		songList:     sli,
-		progressBar:  pb,
-		downloadChan: make(chan downloader.DownloadProgress, 100),
-		taskChan:     make(chan downloadTask, 100),
+		state:         stateSearch,
+		config:        cfg,
+		client:        c,
+		downloader:    downloader.NewDownloader(c, cfg),
+		searchInput:   sip,
+		publisherList: pli,
+		albumList:     ali,
+		songList:      sli,
+		progressBar:   pb,
+		downloadChan:  make(chan downloader.DownloadProgress, 100),
+		taskChan:      make(chan downloadTask, 100),
 	}
 
 	// Start the background worker
@@ -147,11 +171,11 @@ func NewMainModel(cfg config.Config) mainModel {
 func (m *mainModel) downloadWorker() {
 	for task := range m.taskChan {
 		if task.isSong {
-			_ = m.downloader.DownloadSongWithCallback(task.song, task.albumTitle, func(p downloader.DownloadProgress) {
+			_ = m.downloader.DownloadSongForAlbumWithCallback(task.song, task.albumTitle, task.albumYear, func(p downloader.DownloadProgress) {
 				m.downloadChan <- p
 			})
 		} else {
-			_ = m.downloader.DownloadAlbumWithCallback(task.url, func(p downloader.DownloadProgress) {
+			_ = m.downloader.DownloadAlbumInSubdirectoryWithCallback(task.url, task.publisherDir, func(p downloader.DownloadProgress) {
 				m.downloadChan <- p
 			})
 		}
@@ -185,6 +209,7 @@ func (m *mainModel) recalcSizes() {
 	}
 
 	m.albumList.SetSize(listWidth, listHeight)
+	m.publisherList.SetSize(listWidth, listHeight)
 	m.songList.SetSize(listWidth, listHeight)
 }
 
@@ -225,6 +250,17 @@ func (m mainModel) renderHelp(pairs [][2]string) string {
 	return strings.Join(parts, sepStyle.Render(" • "))
 }
 
+func (m mainModel) downloadSettingsHelp() [][2]string {
+	imageState := "OFF"
+	if m.config.DownloadImages {
+		imageState = "ON"
+	}
+	return [][2]string{
+		{"Tab ⇆", fmt.Sprintf(" format [%s]", strings.ToUpper(m.config.Format))},
+		{"I", fmt.Sprintf(" images [%s]", imageState)},
+	}
+}
+
 type albumItem struct {
 	album client.Album
 }
@@ -251,6 +287,14 @@ func (i songItem) Description() string {
 	return desc
 }
 func (i songItem) FilterValue() string { return i.song.Title }
+
+type publisherItem struct {
+	publisher client.Publisher
+}
+
+func (i publisherItem) Title() string       { return i.publisher.Name }
+func (i publisherItem) Description() string { return "Publisher" }
+func (i publisherItem) FilterValue() string { return i.publisher.Name }
 
 func (m mainModel) Init() tea.Cmd {
 	return tea.Batch(textinput.Blink, m.waitForDownload())
@@ -280,14 +324,44 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.config.Format = "flac"
 			}
 			_ = m.config.Save()
-			m.downloader.Config.Format = m.config.Format
+			m.downloader.Config = m.config
 			return m, nil
+		case "i":
+			// Keep ordinary typing available in the search field. The image
+			// setting can be changed from every results or album view.
+			if m.state != stateSearch {
+				m.config.DownloadImages = !m.config.DownloadImages
+				_ = m.config.Save()
+				m.downloader.Config = m.config
+				return m, nil
+			}
+		case "f2":
+			if m.state == stateSearch {
+				if m.searchMode == searchModeOST {
+					m.searchMode = searchModePublisher
+					m.searchInput.Placeholder = "Search for publisher..."
+				} else {
+					m.searchMode = searchModeOST
+					m.searchInput.Placeholder = "Search for OST..."
+				}
+				m.searchInput.SetValue("")
+				m.searchInput.Focus()
+				return m, nil
+			}
 		case "ctrl+c", "q":
 			m.stopPlayback()
 			return m, tea.Quit
 		case "esc", "backspace":
 			switch m.state {
+			case statePublisherList:
+				m.state = stateSearch
+				m.searchInput.Focus()
+				return m, nil
 			case stateAlbumList:
+				if m.currentPublisher != "" {
+					m.state = statePublisherList
+					return m, nil
+				}
 				m.state = stateSearch
 				m.searchInput.Focus()
 				return m, nil
@@ -323,11 +397,35 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recalcSizes()
 	case searchResultMsg:
 		m.state = stateAlbumList
+		m.currentPublisher = ""
 		var items []list.Item
 		for _, a := range msg.albums {
 			items = append(items, albumItem{album: a})
 		}
 
+		m.albumList.SetItems(items)
+		m.albumList.Select(0)
+		m.recalcSizes()
+		return m, nil
+
+	case publisherSearchResultMsg:
+		m.state = statePublisherList
+		var items []list.Item
+		for _, publisher := range msg.publishers {
+			items = append(items, publisherItem{publisher: publisher})
+		}
+		m.publisherList.SetItems(items)
+		m.publisherList.Select(0)
+		m.recalcSizes()
+		return m, nil
+
+	case publisherAlbumsMsg:
+		m.state = stateAlbumList
+		m.currentPublisher = msg.details.Name
+		var items []list.Item
+		for _, album := range msg.details.Albums {
+			items = append(items, albumItem{album: album})
+		}
 		m.albumList.SetItems(items)
 		m.albumList.Select(0)
 		m.recalcSizes()
@@ -402,8 +500,24 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			query := m.searchInput.Value()
 			if query != "" {
 				m.state = stateLoading
-				m.loadingMsg = "Searching..."
+				if m.searchMode == searchModePublisher {
+					m.loadingMsg = "Searching publishers..."
+					return m, m.performPublisherSearch(query)
+				}
+				m.loadingMsg = "Searching OSTs..."
 				return m, m.performSearch(query)
+			}
+		}
+
+	case statePublisherList:
+		m.publisherList, cmd = m.publisherList.Update(msg)
+		cmds = append(cmds, cmd)
+		if keyMsg, ok := msg.(tea.KeyMsg); ok && strings.ToLower(keyMsg.String()) == "enter" {
+			i, ok := m.publisherList.SelectedItem().(publisherItem)
+			if ok {
+				m.state = stateLoading
+				m.loadingMsg = "Loading publisher albums..."
+				return m, m.loadPublisher(i.publisher.URL)
 			}
 		}
 
@@ -427,6 +541,18 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.taskChan <- downloadTask{url: i.album.URL, isSong: false}
 					cmds = append(cmds, m.albumList.NewStatusMessage(fmt.Sprintf("Added to queue: %s", i.album.Title)))
 				}
+			case "a":
+				if len(m.albumList.Items()) > 0 {
+					albums := make([]client.Album, 0, len(m.albumList.Items()))
+					for _, item := range m.albumList.Items() {
+						if album, ok := item.(albumItem); ok {
+							albums = append(albums, album.album)
+						}
+					}
+					m.queueCount += len(albums)
+					m.enqueueAlbums(albums, m.currentPublisher)
+					cmds = append(cmds, m.albumList.NewStatusMessage(fmt.Sprintf("Added %d albums to queue", len(albums))))
+				}
 			}
 		}
 
@@ -447,7 +573,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				i, ok := m.songList.SelectedItem().(songItem)
 				if ok {
 					m.queueCount++
-					m.taskChan <- downloadTask{song: i.song, albumTitle: m.currentAlbum.Title, isSong: true}
+					m.taskChan <- downloadTask{song: i.song, albumTitle: m.currentAlbum.Title, albumYear: m.currentAlbum.Year, isSong: true}
 					cmds = append(cmds, m.songList.NewStatusMessage(fmt.Sprintf("Added to queue: %s", i.song.Title)))
 				}
 			}
@@ -482,36 +608,59 @@ func (m mainModel) View() string {
 	var helpPairs2 [][2]string
 	switch m.state {
 	case stateSearch:
+		modeLabel := "OST"
+		if m.searchMode == searchModePublisher {
+			modeLabel = "PUBLISHER"
+		}
 		header := m.renderHeader("KHInsider Explorer", innerWidth)
 		mainView = fmt.Sprintf(
-			"\n%s\n\n  %s",
+			"\n%s\n  Search mode: %s\n\n  %s",
 			header,
+			modeLabel,
 			m.searchInput.View(),
 		)
 		helpPairs1 = [][2]string{
+			{"F2", " search mode"},
 			{"Enter ↵", " search"},
 			{"Ctrl+C", " quit app"},
 		}
 		helpPairs2 = [][2]string{
 			{"Tab ⇆", fmt.Sprintf(" format [%s]", strings.ToUpper(m.config.Format))},
 		}
+	case statePublisherList:
+		header := m.renderHeader("Publisher Results", innerWidth)
+		var body string
+		if len(m.publisherList.Items()) == 0 {
+			body = "\n" + noItemsStyle.Render("No publishers found.")
+		} else {
+			body = m.publisherList.View()
+		}
+		mainView = fmt.Sprintf("\n%s\n%s", header, body)
+		helpPairs1 = [][2]string{
+			{"Esc", " back"},
+			{"Enter ↵", " open publisher"},
+		}
+		helpPairs2 = m.downloadSettingsHelp()
 	case stateAlbumList:
-		header := m.renderHeader("Search Results", innerWidth)
+		title := "Search Results"
+		if m.currentPublisher != "" {
+			title = "Publisher: " + m.currentPublisher
+		}
+		header := m.renderHeader(title, innerWidth)
 		var body string
 		if len(m.albumList.Items()) == 0 {
-			body = "\n" + noItemsStyle.Render("No OSTs found.")
+			body = "\n" + noItemsStyle.Render("No albums found.")
 		} else {
 			body = m.albumList.View()
 		}
 		mainView = fmt.Sprintf("\n%s\n%s", header, body)
 		helpPairs1 = [][2]string{
+			{"Esc", " back"},
 			{"Enter ↵", " open"},
 			{"D", " download album"},
-			{"Esc", " back"},
+			{"A", " download all albums"},
 		}
-		helpPairs2 = [][2]string{
-			{"Tab ⇆", fmt.Sprintf(" format [%s]", strings.ToUpper(m.config.Format))},
-		}
+		helpPairs2 = m.downloadSettingsHelp()
 	case stateSongList:
 		titleText := m.currentAlbum.Title
 		if titleText == "" {
@@ -520,18 +669,15 @@ func (m mainModel) View() string {
 
 		header := m.renderHeader(titleText, innerWidth)
 		mainView = fmt.Sprintf("\n%s\n%s", header, m.songList.View())
-		helpPairs1 = [][2]string{
-			{"Enter ↵", " play"},
-			{"D", " download song"},
-		}
+		helpPairs1 = [][2]string{{"D", " download song"}}
 
 		// Show lower Esc hint only while filter is not active
 		if m.songList.FilterValue() == "" {
-			helpPairs1 = append(helpPairs1, [2]string{"Esc", " back"})
+			helpPairs1 = append([][2]string{{"Esc", " back"}, {"Enter ↵", " play"}}, helpPairs1...)
+		} else {
+			helpPairs1 = append([][2]string{{"Enter ↵", " play"}}, helpPairs1...)
 		}
-		helpPairs2 = [][2]string{
-			{"Tab ⇆", fmt.Sprintf(" format [%s]", strings.ToUpper(m.config.Format))},
-		}
+		helpPairs2 = m.downloadSettingsHelp()
 	}
 
 	if m.state == stateSongList && m.songList.FilterState() == list.Filtering {
@@ -591,6 +737,8 @@ func (m mainModel) View() string {
 
 // Commands
 type searchResultMsg struct{ albums []client.Album }
+type publisherSearchResultMsg struct{ publishers []client.Publisher }
+type publisherAlbumsMsg struct{ details client.PublisherDetails }
 type albumDetailsMsg struct{ details client.AlbumDetails }
 type playbackStartedMsg struct {
 	cmd       *exec.Cmd
@@ -608,6 +756,34 @@ func (m mainModel) performSearch(query string) tea.Cmd {
 		}
 		return searchResultMsg{albums}
 	}
+}
+
+func (m mainModel) performPublisherSearch(query string) tea.Cmd {
+	return func() tea.Msg {
+		publishers, err := m.client.SearchPublishers(query)
+		if err != nil {
+			return errorMsg{err}
+		}
+		return publisherSearchResultMsg{publishers}
+	}
+}
+
+func (m mainModel) loadPublisher(url string) tea.Cmd {
+	return func() tea.Msg {
+		details, err := m.client.GetPublisherAlbums(url)
+		if err != nil {
+			return errorMsg{err}
+		}
+		return publisherAlbumsMsg{details}
+	}
+}
+
+func (m mainModel) enqueueAlbums(albums []client.Album, publisherDir string) {
+	go func() {
+		for _, album := range albums {
+			m.taskChan <- downloadTask{url: album.URL, publisherDir: publisherDir, isSong: false}
+		}
+	}()
 }
 
 func (m mainModel) loadAlbum(url string) tea.Cmd {
