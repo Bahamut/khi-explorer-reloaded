@@ -11,7 +11,7 @@ It CAN download entire album lists, **including the album art**, separated by fo
 Fully working since October 2026.
 
 <p align="center">
-  <img src="https://artifacts.grolmes.com/khi-explorer/demo.gif" alt="Showcase" width="60%" />
+  <img src="https://github.com/Bahamut/khi-explorer-reloaded/raw/main/assets/demo.gif" alt="Showcase" width="60%" />
 </p>
 
 ## Features
@@ -87,6 +87,6 @@ go build -o khi-reloaded .
 ## ✨ Acknowledgements ✨
 
 - [KHInsider](https://www.khinsider.com) — For hosting such an extensive collection of video game music
-- [madLinux7/khi-explorer](https://github.com/madLinux7/khi-explorer) — Original project this fork is based on.
+- Original project: [madLinux7/khi-explorer](https://github.com/madLinux7/khi-explorer).
 - [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) — For the elegant TUI framework
 - [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) — For beautiful styling primitives

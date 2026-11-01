@@ -63,7 +63,7 @@ func defaultDownloadPath() string {
 }
 
 func legacyDownloadPath() string {
-	return filepath.Join(getHomeDir(), "khi-reloaded")
+	return filepath.Join(getHomeDir(), "khi_explorer")
 }
 
 func samePath(left, right string) bool {

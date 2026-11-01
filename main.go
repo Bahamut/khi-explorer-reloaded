@@ -70,7 +70,7 @@ TUI Download Controls:
   I               Toggle album-image downloads (outside the search field)
 
 Configuration:
-  Settings path:  ~/.khi_explorer.yaml
+  Settings path:  ~/.khi-reloaded.yaml
   Music folder:   ~/Downloads/khi-reloaded/ (Windows default)
 `, Version)
 	fmt.Print(helpText)
