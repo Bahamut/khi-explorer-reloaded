@@ -1,10 +1,15 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
 	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
@@ -39,6 +44,7 @@ type PublisherDetails struct {
 }
 
 type Song struct {
+	Disk     string
 	Number   string
 	Title    string
 	URL      string // Page URL
@@ -61,7 +67,10 @@ type AlbumImage struct {
 
 const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
 
-var yearPattern = regexp.MustCompile(`(?:^|[^0-9])([12][0-9]{3})(?:[^0-9]|$)`)
+var (
+	yearPattern     = regexp.MustCompile(`(?:^|[^0-9])([12][0-9]{3})(?:[^0-9]|$)`)
+	pageYearPattern = regexp.MustCompile(`(?i)\bYear\s*:\s*([12][0-9]{3})\b`)
+)
 
 func NewClient() *Client {
 	options := []tls_client.HttpClientOption{
@@ -123,26 +132,267 @@ func (c *Client) Search(query string) ([]Album, error) {
 	return parseAlbums(doc, "table.albumList tr"), nil
 }
 
-// SearchPublishers resolves a publisher name to its KHInsider publisher page.
-// KHInsider does not expose a publisher-search endpoint, so a valid result is
-// presented as a selectable publisher before its albums are loaded.
+// SearchPublishers resolves a query (full name, partial name, or multiple words)
+// to all matching KHInsider publisher pages containing any of the search words.
 func (c *Client) SearchPublishers(query string) ([]Publisher, error) {
-	slug := publisherSlug(query)
-	if slug == "" {
+	words := publisherQueryWords(query)
+	if len(words) == 0 {
 		return nil, nil
 	}
 
-	publisherURL := fmt.Sprintf("%s/game-soundtracks/publisher/%s", BaseURL, url.PathEscape(slug))
-	doc, err := c.doRequest(publisherURL)
+	var candidateSlugs []string
+	seenSlug := make(map[string]struct{})
+	addCandidate := func(raw string) {
+		slug := publisherSlug(raw)
+		if slug == "" {
+			return
+		}
+		if _, exists := seenSlug[slug]; exists {
+			return
+		}
+		if !publisherMatchesAnyWord(raw, words) && !publisherMatchesAnyWord(slug, words) {
+			return
+		}
+		seenSlug[slug] = struct{}{}
+		candidateSlugs = append(candidateSlugs, slug)
+	}
+
+	// 1. Direct slugs: full query, individual words, and two-word combinations
+	addCandidate(query)
+	for _, w := range words {
+		addCandidate(w)
+	}
+	for i := 0; i < len(words); i++ {
+		for j := 0; j < len(words); j++ {
+			if i != j {
+				addCandidate(words[i] + " " + words[j])
+			}
+		}
+	}
+
+	// 2. Discover multi-word publisher and artist names concurrently
+	mbQuery := strings.Join(words, " OR ")
+	var (
+		mbLabels  []string
+		mbArtists []string
+		wdNames   []string
+		wg        sync.WaitGroup
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		mbLabels = c.fetchMusicBrainzNames("label", "labels", mbQuery)
+		mbArtists = c.fetchMusicBrainzNames("artist", "artists", mbQuery)
+	}()
+	go func() {
+		defer wg.Done()
+		var all []string
+		for _, w := range words {
+			all = append(all, c.fetchWikidataNames(w)...)
+		}
+		wdNames = all
+	}()
+	wg.Wait()
+
+	// Interleave candidates from all three sources so no source starves the others
+	maxLen := len(mbLabels)
+	if len(mbArtists) > maxLen {
+		maxLen = len(mbArtists)
+	}
+	if len(wdNames) > maxLen {
+		maxLen = len(wdNames)
+	}
+	for i := 0; i < maxLen; i++ {
+		if i < len(mbLabels) {
+			addCandidate(mbLabels[i])
+		}
+		if i < len(mbArtists) {
+			addCandidate(mbArtists[i])
+		}
+		if i < len(wdNames) {
+			addCandidate(wdNames[i])
+		}
+	}
+
+	const maxCandidates = 32
+	if len(candidateSlugs) > maxCandidates {
+		candidateSlugs = candidateSlugs[:maxCandidates]
+	}
+
+	// 3. Verify candidate slugs against KHInsider concurrently
+	type verifyResult struct {
+		publisher Publisher
+		ok        bool
+		err       error
+	}
+	results := make([]verifyResult, len(candidateSlugs))
+	sem := make(chan struct{}, 8)
+	var vwg sync.WaitGroup
+	for i, slug := range candidateSlugs {
+		vwg.Add(1)
+		go func(i int, slug string) {
+			defer vwg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			publisherURL := fmt.Sprintf("%s/game-soundtracks/publisher/%s", BaseURL, url.PathEscape(slug))
+			doc, err := c.doRequest(publisherURL)
+			if err != nil {
+				results[i] = verifyResult{err: err}
+				return
+			}
+			name := publisherName(doc)
+			if name != "" && (publisherMatchesAnyWord(name, words) || publisherMatchesAnyWord(slug, words)) {
+				results[i] = verifyResult{
+					publisher: Publisher{Name: name, URL: publisherURL},
+					ok:        true,
+				}
+			}
+		}(i, slug)
+	}
+	vwg.Wait()
+
+	var publishers []Publisher
+	seenURL := make(map[string]struct{})
+	for _, r := range results {
+		if !r.ok {
+			continue
+		}
+		if _, exists := seenURL[r.publisher.URL]; exists {
+			continue
+		}
+		seenURL[r.publisher.URL] = struct{}{}
+		publishers = append(publishers, r.publisher)
+	}
+
+	if len(publishers) == 0 && len(results) > 0 && results[0].err != nil {
+		return nil, results[0].err
+	}
+	return publishers, nil
+}
+
+func publisherQueryWords(query string) []string {
+	var words []string
+	seen := make(map[string]struct{})
+	for _, field := range strings.Fields(query) {
+		slug := publisherSlug(field)
+		if slug == "" {
+			continue
+		}
+		for _, part := range strings.Split(slug, "-") {
+			if part == "" {
+				continue
+			}
+			if _, exists := seen[part]; exists {
+				continue
+			}
+			seen[part] = struct{}{}
+			words = append(words, part)
+		}
+	}
+	return words
+}
+
+func publisherMatchesAnyWord(candidate string, words []string) bool {
+	lower := strings.ToLower(candidate)
+	slug := publisherSlug(candidate)
+	for _, w := range words {
+		lw := strings.ToLower(strings.TrimSpace(w))
+		sw := publisherSlug(w)
+		if lw != "" && strings.Contains(lower, lw) {
+			return true
+		}
+		if sw != "" && strings.Contains(slug, sw) {
+			return true
+		}
+	}
+	return false
+}
+
+var apiHTTPClient = &http.Client{Timeout: 6 * time.Second}
+
+func (c *Client) fetchMusicBrainzNames(endpoint, listKey, query string) []string {
+	apiURL := fmt.Sprintf("https://musicbrainz.org/ws/2/%s/?query=%s&fmt=json&limit=25", endpoint, url.QueryEscape(query))
+	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
-		return nil, err
+		return nil
+	}
+	req.Header.Set("User-Agent", "KHI-Explorer-Reloaded/1.0 (https://github.com/Bahamut/khi-explorer-reloaded)")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := apiHTTPClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil
 	}
 
-	name := publisherName(doc)
-	if name == "" {
-		return nil, nil
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil
 	}
-	return []Publisher{{Name: name, URL: publisherURL}}, nil
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil
+	}
+	items, _ := payload[listKey].([]any)
+	var names []string
+	for _, item := range items {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if name, ok := m["name"].(string); ok && name != "" {
+			names = append(names, name)
+		}
+		if sortName, ok := m["sort-name"].(string); ok && sortName != "" {
+			names = append(names, sortName)
+		}
+	}
+	return names
+}
+
+func (c *Client) fetchWikidataNames(word string) []string {
+	apiURL := "https://www.wikidata.org/w/api.php?action=wbsearchentities&search=" + url.QueryEscape(word) + "&language=en&format=json&limit=20"
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", "KHI-Explorer-Reloaded/1.0 (https://github.com/Bahamut/khi-explorer-reloaded)")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := apiHTTPClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil
+	}
+	var payload struct {
+		Search []struct {
+			Label   string   `json:"label"`
+			Aliases []string `json:"aliases"`
+		} `json:"search"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil
+	}
+	var names []string
+	for _, item := range payload.Search {
+		if item.Label != "" {
+			names = append(names, item.Label)
+		}
+		names = append(names, item.Aliases...)
+	}
+	return names
 }
 
 // GetPublisherAlbums retrieves every page of a publisher's album list.
@@ -361,9 +611,14 @@ func (c *Client) GetAlbumDetails(albumURL string) (AlbumDetails, error) {
 		return AlbumDetails{}, err
 	}
 
+	return parseAlbumDetails(doc, albumURL), nil
+}
+
+func parseAlbumDetails(doc *goquery.Document, albumURL string) AlbumDetails {
+	title := strings.TrimSpace(doc.Find("h2").First().Text())
 	details := AlbumDetails{
-		Title:  doc.Find("h2").First().Text(),
-		Year:   albumYear(albumURL, doc.Find("h2").First().Text()),
+		Title:  title,
+		Year:   extractAlbumYear(doc, albumURL, title),
 		Images: extractAlbumImages(doc, albumURL),
 	}
 
@@ -377,7 +632,12 @@ func (c *Client) GetAlbumDetails(albumURL string) (AlbumDetails, error) {
 			fmt.Sscanf(cStr, "%d", &colspan)
 		}
 
-		if strings.Contains(text, "song name") {
+		if text == "cd" || text == "disc" || text == "disk" {
+			tdIndexMap["cd"] = currentTdIdx
+		} else if text == "#" {
+			tdIndexMap["number"] = currentTdIdx
+		} else if strings.Contains(text, "song name") {
+			tdIndexMap["title"] = currentTdIdx
 			if colspan > 1 {
 				tdIndexMap["duration"] = currentTdIdx + 1
 			}
@@ -390,8 +650,9 @@ func (c *Client) GetAlbumDetails(albumURL string) (AlbumDetails, error) {
 		currentTdIdx += colspan
 	})
 
+	songSeq := 0
 	doc.Find("table#songlist tr").Each(func(i int, s *goquery.Selection) {
-		if s.AttrOr("id", "") == "songlist_header" || s.Find("td").Length() < 4 {
+		if s.AttrOr("id", "") == "songlist_header" || s.AttrOr("id", "") == "songlist_footer" || s.Find("td").Length() < 4 {
 			return
 		}
 
@@ -401,9 +662,23 @@ func (c *Client) GetAlbumDetails(albumURL string) (AlbumDetails, error) {
 			return
 		}
 
+		songSeq++
+		rawNumber := ""
+		if idx, ok := tdIndexMap["number"]; ok && idx < tds.Length() {
+			rawNumber = tds.Eq(idx).Text()
+		} else if _, hasCD := tdIndexMap["cd"]; !hasCD && len(tdIndexMap) == 0 && tds.Length() > 1 {
+			rawNumber = tds.Eq(1).Text()
+		}
+
+		rawDisk := ""
+		if idx, ok := tdIndexMap["cd"]; ok && idx < tds.Length() {
+			rawDisk = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(tds.Eq(idx).Text()), "."))
+		}
+
 		song := Song{
-			Number: strings.TrimSpace(tds.Eq(1).Text()),
-			Title:  titleLink.Text(),
+			Disk:   rawDisk,
+			Number: NormalizeTrackNumber(rawNumber, songSeq),
+			Title:  strings.TrimSpace(titleLink.Text()),
 			URL:    titleLink.AttrOr("href", ""),
 		}
 
@@ -424,7 +699,51 @@ func (c *Client) GetAlbumDetails(albumURL string) (AlbumDetails, error) {
 		details.Songs = append(details.Songs, song)
 	})
 
-	return details, nil
+	// Only activate {disk} when the album actually spans multiple discs.
+	distinctDisks := make(map[string]struct{})
+	for _, s := range details.Songs {
+		if s.Disk != "" {
+			distinctDisks[s.Disk] = struct{}{}
+		}
+	}
+	if len(distinctDisks) <= 1 {
+		for i := range details.Songs {
+			details.Songs[i].Disk = ""
+		}
+	}
+
+	return details
+}
+
+// NormalizeTrackNumber strips any trailing dot left by KHInsider's track table
+// and pads single-digit track numbers (e.g. "1." -> "01").
+func NormalizeTrackNumber(raw string, fallbackIndex int) string {
+	n := strings.TrimSpace(raw)
+	n = strings.TrimSuffix(n, ".")
+	n = strings.TrimSpace(n)
+	if n == "" && fallbackIndex > 0 {
+		return fmt.Sprintf("%02d", fallbackIndex)
+	}
+	if len(n) == 1 && n[0] >= '0' && n[0] <= '9' {
+		return "0" + n
+	}
+	return n
+}
+
+func extractAlbumYear(doc *goquery.Document, albumURL, title string) string {
+	year := ""
+	doc.Find("#pageContent p, p").EachWithBreak(func(_ int, s *goquery.Selection) bool {
+		match := pageYearPattern.FindStringSubmatch(s.Text())
+		if len(match) > 1 {
+			year = match[1]
+			return false
+		}
+		return true
+	})
+	if year != "" {
+		return year
+	}
+	return albumYear(albumURL, title)
 }
 
 func albumYear(albumURL, title string) string {

@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/Bahamut/khi-explorer-reloaded/client"
@@ -30,6 +31,27 @@ func TestConfiguredNames(t *testing.T) {
 	}
 	if got, want := d.albumFolderName("Earthlight", "2006"), "Earthlight [2006]"; got != want {
 		t.Errorf("album folder = %q, want %q", got, want)
+	}
+}
+
+func TestDefaultTrackFilenameSingleAndMultiDisc(t *testing.T) {
+	d := Downloader{}
+	if got, want := d.trackFilename(client.Song{Number: "1.", Title: "Beyond the Cloud"}, ".flac"), "01 - Beyond the Cloud.flac"; got != want {
+		t.Errorf("single disc track filename = %q, want %q", got, want)
+	}
+	if got, want := d.trackFilename(client.Song{Disk: "1", Number: "1.", Title: "Title"}, ".flac"), "1.01 - Title.flac"; got != want {
+		t.Errorf("multi disc track filename = %q, want %q", got, want)
+	}
+}
+
+func TestDiskFoldersSeparatesCDsAndOmitsDiskPrefix(t *testing.T) {
+	d := Downloader{Config: config.Config{DiskFolders: true}}
+	song := client.Song{Disk: "2", Number: "1.", Title: "Title"}
+	if got, want := d.trackFilename(song, ".flac"), "01 - Title.flac"; got != want {
+		t.Errorf("disk folders track filename = %q, want %q", got, want)
+	}
+	if got, want := d.songOutputDir(filepath.Join("downloads", "Album"), song), filepath.Join("downloads", "Album", "CD2"); got != want {
+		t.Errorf("disk folders output dir = %q, want %q", got, want)
 	}
 }
 

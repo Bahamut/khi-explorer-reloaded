@@ -41,7 +41,7 @@ func main() {
 var Version = "dev"
 
 func printHelp() {
-helpText := fmt.Sprintf(`khi-reloaded (v%s) - A fast, interactive TUI browser and downloader for KHInsider.
+	helpText := fmt.Sprintf(`khi-reloaded (v%s) - A fast, interactive TUI browser and downloader for KHInsider.
 
 Usage:
   khi-reloaded [flags]
@@ -68,6 +68,7 @@ TUI Download Controls:
   D               Queue entire album for download (in Search results view)
   A               Queue every album in the current results
   I               Toggle album-image downloads (outside the search field)
+  F               Toggle per-disc folders CD1, CD2, etc. (outside the search field)
 
 Configuration:
   Settings path:  ~/.khi-reloaded.yaml

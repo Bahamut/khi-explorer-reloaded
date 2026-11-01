@@ -20,3 +20,13 @@ func resumeProcess(cmd *exec.Cmd) error {
 	}
 	return nil
 }
+
+func killProcess(cmd *exec.Cmd) error {
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Signal(syscall.SIGCONT)
+		return cmd.Process.Kill()
+	}
+	return nil
+}
+
+func applyPlatformWindowSettings() {}

@@ -1,4 +1,4 @@
-# KHI Explorer Reloaded
+# KHI Explorer (Reloaded Edition)
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Bahamut/khi-explorer-reloaded?style=flat-square)](https://go.dev/)
 [![Release](https://img.shields.io/github/v/release/Bahamut/khi-explorer-reloaded?style=flat-square)](https://github.com/Bahamut/khi-explorer-reloaded/releases)
@@ -7,8 +7,7 @@
 [![License](https://img.shields.io/github/license/Bahamut/khi-explorer-reloaded?style=flat-square)](https://github.com/Bahamut/khi-explorer-reloaded/blob/main/LICENSE)
 
 Standalone browser, player and bulk downloader for [KHInsider](https://downloads.khinsider.com).
-It CAN download entire album lists, **including the album art**, separated by folders and even **bulk download a full albums list from any publisher**.
-Fully working since October 2026.
+It can download individual tracks, full albums, **album art (covers & booklets)**, organize multi-disc releases, and **bulk download entire discographies from any publisher**.
 
 <p align="center">
   <img src="https://github.com/Bahamut/khi-explorer-reloaded/raw/main/assets/demo.gif" alt="Showcase" width="60%" />
@@ -16,41 +15,47 @@ Fully working since October 2026.
 
 ## Features
 
-- **Interactive TUI** — Search for OST, filter tracks, publishers and navigate with keyboard-only controls.
-- **Bulk Downloads** — Download individual tracks or entire albums with **D**, or all visible albums with **A**. Publisher bulk downloads are grouped in a publisher folder and album art can be saved in `Images`.
-- **Search & Filter** — Find games and tracks quickly with fuzzy search, supporting search by Publisher or by OST.
-- **Audio Playback** — Stream playback right from your terminal.
-- **Quick Format Switch** — Toggle between FLAC/MP3 inside the app.
-- **Quick Images Toggle** — Toggle Album Art downloads.
-- **Configurable** — Set your preferred format and download path in `~/.khi-reloaded.yaml`
-- **Cross-platform** — Use on Linux, macOS and Windows.
+- **Interactive TUI** — Search for soundtracks, filter tracklists, explore publishers, and browse with keyboard-only controls.
+- **Smart Publisher Search** — Find publishers and labels even with partial names or single words (e.g. searching `levo` discovers `Levo Lution`, `french` finds `French Bread`).
+- **Multi-disc Management** — Automatically formats multi-CD albums with `{disk}.{track_number}` (e.g. `1.01 - Title`) or cleanly separates them into subdirectories (`CD1/01 - Title`, `CD2/...`) using the `F` key toggle.
+- **Bulk Downloads** — Download individual songs with **D**, full albums with **D**, or all albums listed on screen with **A**. Publisher bulk downloads are cleanly organized into dedicated directories.
+- **Album Artwork** — Save full-resolution covers, booklets, and discs into an `Images/` folder with toggle **I**.
+- **Audio Playback** — Stream songs directly inside the terminal with native pause/resume (**P**) and stop (**S**) controls on both Windows and Unix.
+- **Embedded Application Icon** — Native Windows icon embedded directly into the binary and console window.
+- **Quick Format Switch** — Toggle between lossless FLAC and MP3 on the fly with **Tab**.
+- **Configurable** — Customize templates, default audio format, and download destinations in `~/.khi-reloaded.yaml`.
+- **Cross-platform** — Native binaries for Linux, macOS, and Windows.
+
+---
+
 ## Usage
 
-```
+```bash
 khi-reloaded
 ```
 
-### Navigation
+### Navigation Controls
 
 | Key | Action |
 |-----|--------|
-| `F2` | Switch search mode (OST or publisher) |
-| `↑` / `↓` or `k` / `j` | Move selection cursor up/down |
-| `←` / `→` | Previous/Next page |
+| `F2` | Switch search mode (OST ⇆ Publisher) |
+| `↑` / `↓` or `k` / `j` | Move selection cursor up / down |
+| `←` / `→` | Previous / Next page |
 | `Enter` | Select album, search, or play song |
-| `Esc` / `Backspace` | Go back to previous view |
-| `/` | Enter filter/search mode |
+| `Esc` / `Backspace` | Go back to previous view (or clear filter) |
+| `/` | Enter search filter mode in track lists |
 | `Tab` | Toggle download format (FLAC ⇆ MP3) |
-| `I` | Toggle album-image downloads (in result and album views) |
-| `q` / `Ctrl+C` | Quit |
+| `I` | Toggle album-image downloads (in result & album views) |
+| `F` | Toggle multi-disc folders `CD1`, `CD2`, etc. (in result & album views) |
+| `q` / `Ctrl+C` | Quit application |
 
 ### Download Controls
 
 | Key | Action |
 |-----|--------|
-| `D` | Queue highlighted song for download (Album view) |
-| `D` | Queue one album for download (Search results view) |
-| `A` | Queue all the albums in the list for download (OST album list or Publisher album list) |
+| `D` | Queue highlighted song for download (in Album view) |
+| `D` | Queue highlighted album for download (in Search results view) |
+| `A` | Queue all albums in current results for bulk download |
 
 ### Playback Controls
 
@@ -59,22 +64,32 @@ khi-reloaded
 | `P` | Pause or resume playback |
 | `S` | Stop playback |
 
-### Configuration
+---
+
+## Configuration
 
 Configuration is stored at `~/.khi-reloaded.yaml`:
 
 ```yaml
-format: flac                         # Download format (flac, mp3)
-download_path: ~/Downloads/khi-reloaded # Windows download destination
-download_images: true                # Save full-size album images in Images/
-track_filename_format: "{track_number} - {track_name}"
+format: flac                            # Preferred audio format: flac, mp3
+download_path: ~/Downloads/khi-reloaded # Download folder (Windows default)
+download_images: true                   # Save full-size album artwork in Images/
+disk_folders: false                     # Separate multi-disc albums into CD1, CD2, etc.
+track_filename_format: "{disk}.{track_number} - {track_name}"
 album_folder_format: "{year} - {album_name}"
-player: mpv                          # Audio player command
+player: mpv                             # Audio player command (mpv, ffplay, vlc)
 ```
 
-`track_filename_format` accepts `{track_number}` and `{track_name}`. `album_folder_format` accepts `{year}` and `{album_name}`. The audio extension is added automatically.
+- **`track_filename_format`**: supports `{disk}`, `{track_number}`, and `{track_name}`. When an album has only 1 disc or when `disk_folders` is enabled, `{disk}` is automatically omitted to keep filenames clean.
+- **`album_folder_format`**: supports `{year}` and `{album_name}`.
+
+---
 
 ## Installation
+
+### Pre-built Binaries
+
+Download the latest pre-compiled binary for your operating system from the [Releases](https://github.com/Bahamut/khi-explorer-reloaded/releases) page.
 
 ### Build from Source
 
@@ -84,9 +99,11 @@ cd khi-explorer-reloaded
 go build -o khi-reloaded .
 ```
 
+---
+
 ## ✨ Acknowledgements ✨
 
-- [KHInsider](https://www.khinsider.com) — For hosting such an extensive collection of video game music
+- [KHInsider](https://www.khinsider.com) — For hosting such an extensive collection of video game music.
 - Original project: [madLinux7/khi-explorer](https://github.com/madLinux7/khi-explorer).
-- [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) — For the elegant TUI framework
-- [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) — For beautiful styling primitives
+- [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) — For the elegant TUI framework.
+- [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) — For beautiful terminal styling primitives.

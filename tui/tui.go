@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Bahamut/khi-explorer-reloaded/client"
+	"github.com/Bahamut/khi-explorer-reloaded/config"
+	"github.com/Bahamut/khi-explorer-reloaded/downloader"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/Bahamut/khi-explorer-reloaded/client"
-	"github.com/Bahamut/khi-explorer-reloaded/config"
-	"github.com/Bahamut/khi-explorer-reloaded/downloader"
 )
 
 // Design System / Colors
@@ -175,7 +175,7 @@ func (m *mainModel) downloadWorker() {
 				m.downloadChan <- p
 			})
 		} else {
-			_ = m.downloader.DownloadAlbumInSubdirectoryWithCallback(task.url, task.publisherDir, func(p downloader.DownloadProgress) {
+			_ = m.downloader.DownloadAlbumForYearInSubdirectoryWithCallback(task.url, task.albumYear, task.publisherDir, func(p downloader.DownloadProgress) {
 				m.downloadChan <- p
 			})
 		}
@@ -255,9 +255,14 @@ func (m mainModel) downloadSettingsHelp() [][2]string {
 	if m.config.DownloadImages {
 		imageState = "ON"
 	}
+	diskFolderState := "OFF"
+	if m.config.DiskFolders {
+		diskFolderState = "ON"
+	}
 	return [][2]string{
 		{"Tab ⇆", fmt.Sprintf(" format [%s]", strings.ToUpper(m.config.Format))},
 		{"I", fmt.Sprintf(" images [%s]", imageState)},
+		{"F", fmt.Sprintf(" disk folders [%s]", diskFolderState)},
 	}
 }
 
@@ -297,7 +302,11 @@ func (i publisherItem) Description() string { return "Publisher" }
 func (i publisherItem) FilterValue() string { return i.publisher.Name }
 
 func (m mainModel) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.waitForDownload())
+	return tea.Batch(
+		textinput.Blink,
+		m.waitForDownload(),
+		tea.SetWindowTitle("KHI Explorer (Reloaded Edition)"),
+	)
 }
 
 func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -316,7 +325,7 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			break
 		}
 
-		switch msg.String() {
+		switch strings.ToLower(msg.String()) {
 		case "tab":
 			if m.config.Format == "flac" {
 				m.config.Format = "mp3"
@@ -335,6 +344,13 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.downloader.Config = m.config
 				return m, nil
 			}
+		case "f":
+			if m.state != stateSearch {
+				m.config.DiskFolders = !m.config.DiskFolders
+				_ = m.config.Save()
+				m.downloader.Config = m.config
+				return m, nil
+			}
 		case "f2":
 			if m.state == stateSearch {
 				if m.searchMode == searchModeOST {
@@ -348,10 +364,21 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.searchInput.Focus()
 				return m, nil
 			}
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			m.stopPlayback()
 			return m, tea.Quit
+		case "q":
+			if m.state != stateSearch {
+				m.stopPlayback()
+				return m, tea.Quit
+			}
 		case "esc", "backspace":
+			if m.err != nil {
+				m.err = nil
+				m.state = stateSearch
+				m.searchInput.Focus()
+				return m, nil
+			}
 			switch m.state {
 			case statePublisherList:
 				m.state = stateSearch
@@ -449,12 +476,17 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case playbackStartedMsg:
 		m.player = msg.cmd
 		m.nowPlaying = msg.songTitle
+		m.isPaused = false
 		m.recalcSizes()
 		return m, m.waitForPlayback(msg.cmd)
 
 	case playbackFinishedMsg:
-		m.nowPlaying = ""
-		m.recalcSizes()
+		if m.player == msg.cmd {
+			m.player = nil
+			m.nowPlaying = ""
+			m.isPaused = false
+			m.recalcSizes()
+		}
 		return m, nil
 
 	case downloader.DownloadProgress:
@@ -532,13 +564,19 @@ func (m mainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if ok {
 					m.state = stateLoading
 					m.loadingMsg = "Loading album..."
-					return m, m.loadAlbum(i.album.URL)
+					return m, m.loadAlbum(i.album.URL, i.album.Year)
 				}
 			case "d":
 				i, ok := m.albumList.SelectedItem().(albumItem)
 				if ok {
 					m.queueCount++
-					m.taskChan <- downloadTask{url: i.album.URL, isSong: false}
+					m.taskChan <- downloadTask{
+						url:          i.album.URL,
+						albumTitle:   i.album.Title,
+						albumYear:    i.album.Year,
+						publisherDir: m.currentPublisher,
+						isSong:       false,
+					}
 					cmds = append(cmds, m.albumList.NewStatusMessage(fmt.Sprintf("Added to queue: %s", i.album.Title)))
 				}
 			case "a":
@@ -612,7 +650,7 @@ func (m mainModel) View() string {
 		if m.searchMode == searchModePublisher {
 			modeLabel = "PUBLISHER"
 		}
-		header := m.renderHeader("KHInsider Explorer", innerWidth)
+		header := m.renderHeader("KHI Explorer (Reloaded Edition)", innerWidth)
 		mainView = fmt.Sprintf(
 			"\n%s\n  Search mode: %s\n\n  %s",
 			header,
@@ -744,7 +782,9 @@ type playbackStartedMsg struct {
 	cmd       *exec.Cmd
 	songTitle string
 }
-type playbackFinishedMsg struct{}
+type playbackFinishedMsg struct {
+	cmd *exec.Cmd
+}
 type hideProgressMsg struct{}
 type errorMsg struct{ err error }
 
@@ -781,16 +821,25 @@ func (m mainModel) loadPublisher(url string) tea.Cmd {
 func (m mainModel) enqueueAlbums(albums []client.Album, publisherDir string) {
 	go func() {
 		for _, album := range albums {
-			m.taskChan <- downloadTask{url: album.URL, publisherDir: publisherDir, isSong: false}
+			m.taskChan <- downloadTask{
+				url:          album.URL,
+				albumTitle:   album.Title,
+				albumYear:    album.Year,
+				publisherDir: publisherDir,
+				isSong:       false,
+			}
 		}
 	}()
 }
 
-func (m mainModel) loadAlbum(url string) tea.Cmd {
+func (m mainModel) loadAlbum(url, fallbackYear string) tea.Cmd {
 	return func() tea.Msg {
 		details, err := m.client.GetAlbumDetails(url)
 		if err != nil {
 			return errorMsg{err}
+		}
+		if strings.TrimSpace(details.Year) == "" {
+			details.Year = strings.TrimSpace(fallbackYear)
 		}
 		return albumDetailsMsg{details}
 	}
@@ -798,7 +847,7 @@ func (m mainModel) loadAlbum(url string) tea.Cmd {
 
 func (m *mainModel) stopPlayback() {
 	if m.player != nil && m.player.Process != nil {
-		_ = m.player.Process.Kill()
+		_ = killProcess(m.player)
 		m.player = nil
 		m.nowPlaying = ""
 		m.isPaused = false
@@ -868,7 +917,7 @@ func (m mainModel) detectPlayer() (string, []string) {
 func (m mainModel) waitForPlayback(cmd *exec.Cmd) tea.Cmd {
 	return func() tea.Msg {
 		_ = cmd.Wait()
-		return playbackFinishedMsg{}
+		return playbackFinishedMsg{cmd: cmd}
 	}
 }
 
@@ -886,6 +935,7 @@ func (m mainModel) hideProgressCmd() tea.Cmd {
 }
 
 func Start(cfg config.Config) error {
+	applyPlatformWindowSettings()
 	p := tea.NewProgram(NewMainModel(cfg), tea.WithAltScreen())
 	_, err := p.Run()
 	return err

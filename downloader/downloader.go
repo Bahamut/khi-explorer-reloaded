@@ -64,7 +64,7 @@ func (d *Downloader) downloadSongWithCallback(song client.Song, albumFolder, dow
 
 	// Prepare path
 	downloadPath = expandHome(downloadPath)
-	albumPath := filepath.Join(downloadPath, albumFolder)
+	albumPath := d.songOutputDir(filepath.Join(downloadPath, albumFolder), song)
 	if err := os.MkdirAll(albumPath, 0755); err != nil {
 		return err
 	}
@@ -85,31 +85,49 @@ func (d *Downloader) downloadSongWithCallback(song client.Song, albumFolder, dow
 	return err
 }
 
+func (d *Downloader) songOutputDir(albumPath string, song client.Song) string {
+	disk := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(song.Disk), "."))
+	if d.Config.DiskFolders && disk != "" {
+		return filepath.Join(albumPath, sanitizeFilename("CD"+disk))
+	}
+	return albumPath
+}
+
 func (d *Downloader) DownloadAlbum(albumURL string) error {
 	return d.DownloadAlbumWithCallback(albumURL, nil)
 }
 
 func (d *Downloader) DownloadAlbumWithCallback(albumURL string, cb func(DownloadProgress)) error {
-	return d.downloadAlbumWithCallback(albumURL, d.Config.DownloadPath, cb)
+	return d.downloadAlbumWithCallback(albumURL, "", d.Config.DownloadPath, cb)
 }
 
 // DownloadAlbumInSubdirectoryWithCallback downloads an album beneath a named
 // folder in the configured destination. Publisher bulk jobs use this to keep
 // their albums grouped together.
 func (d *Downloader) DownloadAlbumInSubdirectoryWithCallback(albumURL, subdirectory string, cb func(DownloadProgress)) error {
+	return d.DownloadAlbumForYearInSubdirectoryWithCallback(albumURL, "", subdirectory, cb)
+}
+
+// DownloadAlbumForYearInSubdirectoryWithCallback downloads an album and uses
+// fallbackYear when the album page itself does not specify a release year.
+func (d *Downloader) DownloadAlbumForYearInSubdirectoryWithCallback(albumURL, fallbackYear, subdirectory string, cb func(DownloadProgress)) error {
 	downloadPath := d.Config.DownloadPath
 	if subdirectory != "" {
 		downloadPath = filepath.Join(downloadPath, sanitizeFilename(subdirectory))
 	}
-	return d.downloadAlbumWithCallback(albumURL, downloadPath, cb)
+	return d.downloadAlbumWithCallback(albumURL, fallbackYear, downloadPath, cb)
 }
 
-func (d *Downloader) downloadAlbumWithCallback(albumURL, downloadPath string, cb func(DownloadProgress)) error {
+func (d *Downloader) downloadAlbumWithCallback(albumURL, fallbackYear, downloadPath string, cb func(DownloadProgress)) error {
 	details, err := d.Client.GetAlbumDetails(albumURL)
 	if err != nil {
 		return err
 	}
+	if strings.TrimSpace(details.Year) == "" {
+		details.Year = strings.TrimSpace(fallbackYear)
+	}
 
+	albumFolder := d.albumFolderName(details.Title, details.Year)
 	total := len(details.Songs)
 	if d.Config.DownloadImages {
 		total += len(details.Images)
@@ -118,7 +136,6 @@ func (d *Downloader) downloadAlbumWithCallback(albumURL, downloadPath string, cb
 		if cb != nil {
 			cb(DownloadProgress{Total: total, Completed: i, Current: song.Title})
 		}
-		albumFolder := d.albumFolderName(details.Title, details.Year)
 		if err := d.downloadSongWithCallback(song, albumFolder, downloadPath, nil); err != nil {
 			// Log error but continue
 		}
@@ -127,7 +144,7 @@ func (d *Downloader) downloadAlbumWithCallback(albumURL, downloadPath string, cb
 	if d.Config.DownloadImages {
 		// Every album download with image downloads enabled gets an Images
 		// directory, even if the source album does not have any images.
-		albumPath := filepath.Join(expandHome(downloadPath), d.albumFolderName(details.Title, details.Year))
+		albumPath := filepath.Join(expandHome(downloadPath), albumFolder)
 		imagesPath := filepath.Join(albumPath, "Images")
 		if err := os.MkdirAll(imagesPath, 0755); err != nil {
 			return err
@@ -158,34 +175,59 @@ func (d *Downloader) downloadAlbumWithCallback(albumURL, downloadPath string, cb
 }
 
 func (d *Downloader) trackFilename(song client.Song, extension string) string {
-	return sanitizeFilename(applyNameTemplate(d.trackFilenameFormat(), map[string]string{
-		"track_number": song.Number,
+	template := d.trackFilenameFormat()
+	disk := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(song.Disk), "."))
+	if d.Config.DiskFolders {
+		disk = ""
+	}
+	trackNum := client.NormalizeTrackNumber(song.Number, 0)
+
+	if disk == "" {
+		template = strings.ReplaceAll(template, "{disk}.", "")
+		template = strings.ReplaceAll(template, "{disk}-", "")
+		template = strings.ReplaceAll(template, "{disk}_", "")
+		template = strings.ReplaceAll(template, "{disk} ", "")
+		template = strings.ReplaceAll(template, "{disk}", "")
+	} else {
+		if strings.Contains(template, "{disk}{track_number}") {
+			template = strings.ReplaceAll(template, "{disk}", disk+".")
+		} else if !strings.Contains(template, "{disk}") {
+			template = disk + "." + template
+		} else {
+			template = strings.ReplaceAll(template, "{disk}", disk)
+		}
+	}
+
+	name := sanitizeFilename(applyNameTemplate(template, map[string]string{
+		"track_number": trackNum,
 		"track_name":   song.Title,
-	})) + extension
+	}))
+	name = strings.TrimLeft(name, ".-_ ")
+	return name + extension
 }
 
 func (d *Downloader) albumFolderName(title, year string) string {
 	name := sanitizeFilename(applyNameTemplate(d.albumFolderFormat(), map[string]string{
-		"year":       year,
-		"album_name": title,
+		"year":       strings.TrimSpace(year),
+		"album_name": strings.TrimSpace(title),
 	}))
-	name = strings.Trim(name, " -_")
+	name = strings.Trim(name, " -_.")
 	if name == "" {
-		return sanitizeFilename(title)
+		return strings.Trim(sanitizeFilename(title), " .")
 	}
 	return name
 }
 
 func (d *Downloader) trackFilenameFormat() string {
 	if strings.TrimSpace(d.Config.TrackFilenameFormat) == "" {
-		return "{track_number} - {track_name}"
+		return config.DefaultTrackFilenameFormat
 	}
 	return d.Config.TrackFilenameFormat
 }
 
 func (d *Downloader) albumFolderFormat() string {
 	if strings.TrimSpace(d.Config.AlbumFolderFormat) == "" {
-		return "{year} - {album_name}"
+		return config.DefaultAlbumFolderFormat
 	}
 	return d.Config.AlbumFolderFormat
 }

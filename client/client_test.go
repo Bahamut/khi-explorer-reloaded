@@ -16,6 +16,82 @@ func TestAlbumYear(t *testing.T) {
 	}
 }
 
+func TestExtractAlbumYearFromPageMetadata(t *testing.T) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(`
+		<div id="pageContent">
+			<h2>Ragnarok Battle Offline Opening Theme - Sajin no Kanata he</h2>
+			<p>Platforms: <a href="/game-soundtracks/windows">Windows</a><br/>
+			Year: <b>2006</b><br/>
+			Catalog Number: <b>FBCD-011</b></p>
+		</div>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := extractAlbumYear(doc, "https://downloads.khinsider.com/game-soundtracks/album/ragnarok-battle-offline-opening", "Ragnarok Battle Offline Opening Theme - Sajin no Kanata he")
+	if want := "2006"; got != want {
+		t.Errorf("extractAlbumYear = %q, want %q", got, want)
+	}
+}
+
+func TestParseAlbumDetailsSingleAndMultiDisc(t *testing.T) {
+	singleDoc, err := goquery.NewDocumentFromReader(strings.NewReader(`
+		<div id="pageContent">
+			<h2>Single Disc OST</h2>
+			<p>Year: <b>2006</b></p>
+			<table id="songlist">
+				<tr id="songlist_header"><th></th><th>#</th><th colspan="2">Song Name</th><th>MP3</th><th>FLAC</th></tr>
+				<tr><td></td><td>1.</td><td class="clickable-row"><a href="/song1">Beyond the Cloud</a></td><td class="clickable-row">4:50</td><td>9 MB</td><td>30 MB</td></tr>
+				<tr><td></td><td>10.</td><td class="clickable-row"><a href="/song10">Finale</a></td><td class="clickable-row">3:10</td><td>6 MB</td><td>20 MB</td></tr>
+			</table>
+		</div>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	single := parseAlbumDetails(singleDoc, "https://downloads.khinsider.com/game-soundtracks/album/single-ost")
+	if single.Year != "2006" {
+		t.Errorf("single.Year = %q, want 2006", single.Year)
+	}
+	if len(single.Songs) != 2 {
+		t.Fatalf("len(single.Songs) = %d, want 2", len(single.Songs))
+	}
+	if single.Songs[0].Disk != "" || single.Songs[0].Number != "01" || single.Songs[0].Title != "Beyond the Cloud" {
+		t.Errorf("single.Songs[0] = %+v", single.Songs[0])
+	}
+	if single.Songs[1].Disk != "" || single.Songs[1].Number != "10" {
+		t.Errorf("single.Songs[1] = %+v", single.Songs[1])
+	}
+
+	multiDoc, err := goquery.NewDocumentFromReader(strings.NewReader(`
+		<div id="pageContent">
+			<h2>RAGNAROK Online Complete Soundtrack</h2>
+			<p>Year: <b>2009</b></p>
+			<table id="songlist">
+				<tr id="songlist_header"><th></th><th>CD</th><th>#</th><th colspan="2">Song Name</th><th>MP3</th><th>FLAC</th></tr>
+				<tr><td></td><td>1</td><td>1.</td><td class="clickable-row"><a href="/s1">Title</a></td><td class="clickable-row">1:16</td><td>2.82 MB</td><td>6.29 MB</td></tr>
+				<tr><td></td><td>2</td><td>12.</td><td class="clickable-row"><a href="/s2">Monk Zonk</a></td><td class="clickable-row">2:40</td><td>5.00 MB</td><td>14.00 MB</td></tr>
+			</table>
+		</div>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	multi := parseAlbumDetails(multiDoc, "https://downloads.khinsider.com/game-soundtracks/album/ragnarok-online-complete-soundtrack")
+	if multi.Year != "2009" {
+		t.Errorf("multi.Year = %q, want 2009", multi.Year)
+	}
+	if len(multi.Songs) != 2 {
+		t.Fatalf("len(multi.Songs) = %d, want 2", len(multi.Songs))
+	}
+	if multi.Songs[0].Disk != "1" || multi.Songs[0].Number != "01" || multi.Songs[0].Title != "Title" {
+		t.Errorf("multi.Songs[0] = %+v", multi.Songs[0])
+	}
+	if multi.Songs[1].Disk != "2" || multi.Songs[1].Number != "12" || multi.Songs[1].Title != "Monk Zonk" {
+		t.Errorf("multi.Songs[1] = %+v", multi.Songs[1])
+	}
+}
+
 func TestExtractAlbumImagesUsesFullSizeImageLinks(t *testing.T) {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(`
 		<html><body>
@@ -79,5 +155,24 @@ func TestParsePublisherAlbums(t *testing.T) {
 func TestPublisherSlug(t *testing.T) {
 	if got, want := publisherSlug(" Levo  Lution! "), "levo-lution"; got != want {
 		t.Errorf("publisher slug = %q, want %q", got, want)
+	}
+}
+
+func TestPublisherQueryWordsAndMatching(t *testing.T) {
+	words := publisherQueryWords("Levo Lution")
+	if len(words) != 2 || words[0] != "levo" || words[1] != "lution" {
+		t.Fatalf("publisherQueryWords = %v, want [levo lution]", words)
+	}
+	if !publisherMatchesAnyWord("Levo Lution", []string{"levo"}) {
+		t.Errorf("expected Levo Lution to match 'levo'")
+	}
+	if !publisherMatchesAnyWord("Levo Lution", []string{"lution"}) {
+		t.Errorf("expected Levo Lution to match 'lution'")
+	}
+	if !publisherMatchesAnyWord("Square Enix", []string{"square", "falcom"}) {
+		t.Errorf("expected Square Enix to match any word in [square falcom]")
+	}
+	if publisherMatchesAnyWord("Capcom", []string{"levo", "lution"}) {
+		t.Errorf("did not expect Capcom to match [levo lution]")
 	}
 }

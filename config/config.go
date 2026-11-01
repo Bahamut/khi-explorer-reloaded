@@ -13,10 +13,17 @@ type Config struct {
 	Format              string `yaml:"format"`
 	DownloadPath        string `yaml:"download_path"`
 	DownloadImages      bool   `yaml:"download_images"`
+	DiskFolders         bool   `yaml:"disk_folders"`
 	TrackFilenameFormat string `yaml:"track_filename_format"`
 	AlbumFolderFormat   string `yaml:"album_folder_format"`
 	Player              string `yaml:"player"`
 }
+
+const (
+	DefaultTrackFilenameFormat = "{disk}.{track_number} - {track_name}"
+	legacyTrackFilenameFormat  = "{track_number} - {track_name}"
+	DefaultAlbumFolderFormat   = "{year} - {album_name}"
+)
 
 func GetConfigPath() string {
 	home, _ := os.UserHomeDir()
@@ -28,8 +35,9 @@ func LoadConfig() (Config, error) {
 		Format:              "flac",
 		DownloadPath:        defaultDownloadPath(),
 		DownloadImages:      true,
-		TrackFilenameFormat: "{track_number} - {track_name}",
-		AlbumFolderFormat:   "{year} - {album_name}",
+		DiskFolders:         false,
+		TrackFilenameFormat: DefaultTrackFilenameFormat,
+		AlbumFolderFormat:   DefaultAlbumFolderFormat,
 		Player:              "mpv",
 	}
 
@@ -43,12 +51,26 @@ func LoadConfig() (Config, error) {
 	}
 
 	err = yaml.Unmarshal(data, &cfg)
-	if err == nil && runtime.GOOS == "windows" && samePath(cfg.DownloadPath, legacyDownloadPath()) {
-		cfg.DownloadPath = defaultDownloadPath()
-		// Persist the one-time migration so later launches do not continue to
-		// show the obsolete default path.
-		if err := cfg.Save(); err != nil {
-			return cfg, err
+	if err == nil {
+		migrated := false
+		if runtime.GOOS == "windows" && samePath(cfg.DownloadPath, legacyDownloadPath()) {
+			cfg.DownloadPath = defaultDownloadPath()
+			migrated = true
+		}
+		if strings.TrimSpace(cfg.TrackFilenameFormat) == "" || cfg.TrackFilenameFormat == legacyTrackFilenameFormat {
+			cfg.TrackFilenameFormat = DefaultTrackFilenameFormat
+			migrated = true
+		}
+		if strings.TrimSpace(cfg.AlbumFolderFormat) == "" {
+			cfg.AlbumFolderFormat = DefaultAlbumFolderFormat
+			migrated = true
+		}
+		if migrated {
+			// Persist the one-time migration so later launches do not continue to
+			// show obsolete default settings.
+			if err := cfg.Save(); err != nil {
+				return cfg, err
+			}
 		}
 	}
 	return cfg, err
