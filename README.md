@@ -9,16 +9,12 @@
 Standalone browser, player and bulk downloader for [KHInsider](https://downloads.khinsider.com).
 It can download individual tracks, full albums, **album art (covers & booklets)**, organize multi-disc releases, and **bulk download entire discographies from any publisher**.
 
-<p align="center">
-  <img src="https://github.com/Bahamut/khi-explorer-reloaded/raw/main/assets/demo.gif" alt="Showcase" width="60%" />
-</p>
-
 ## Features
 
 - **Interactive TUI** — Search for soundtracks, filter tracklists, explore publishers, and browse with keyboard-only controls.
-- **Smart Publisher Search** — Find publishers and labels even with partial names or single words (e.g. searching `levo` discovers `Levo Lution`, `french` finds `French Bread`).
-- **Multi-disc Management** — Automatically formats multi-CD albums with `{disk}.{track_number}` (e.g. `1.01 - Title`) or cleanly separates them into subdirectories (`CD1/01 - Title`, `CD2/...`) using the `F` key toggle.
-- **Bulk Downloads** — Download individual songs with **D**, full albums with **D**, or all albums listed on screen with **A**. Publisher bulk downloads are cleanly organized into dedicated directories.
+- **Smart Publisher Search** — Find publishers and labels even with partial names or single words.
+- **Multi-disc Management** — Automatically formats multi-CD albums with `{disk}.{track_number}` (e.g. `1.01 - Title`) or cleanly separates them into subdirectories (`CD1/01 - Title`, `CD2/...`) using the **F** key toggle.
+- **Bulk Downloads** — Download individual songs and full albums with **D**, or all albums listed on screen with **A**. Publisher bulk downloads are cleanly organized into dedicated directories.
 - **Album Artwork** — Save full-resolution covers, booklets, and discs into an `Images/` folder with toggle **I**.
 - **Audio Playback** — Stream songs directly inside the terminal with native pause/resume (**P**) and stop (**S**) controls on both Windows and Unix.
 - **Embedded Application Icon** — Native Windows icon embedded directly into the binary and console window.
@@ -103,7 +99,7 @@ go build -o khi-reloaded .
 
 ## ✨ Acknowledgements ✨
 
-- [KHInsider](https://www.khinsider.com) — For hosting such an extensive collection of video game music.
-- Original project: [madLinux7/khi-explorer](https://github.com/madLinux7/khi-explorer).
+- Fork form original project: [madLinux7/khi-explorer](https://github.com/madLinux7/khi-explorer).
 - [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) — For the elegant TUI framework.
 - [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) — For beautiful terminal styling primitives.
+- [KHInsider](https://www.khinsider.com) — For hosting such an extensive collection of video game music.
