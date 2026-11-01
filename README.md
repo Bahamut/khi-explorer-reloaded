@@ -17,7 +17,6 @@ It can download individual tracks, full albums, **album art (covers & booklets)*
 - **Bulk Downloads** — Download individual songs and full albums with **D**, or all albums listed on screen with **A**. Publisher bulk downloads are cleanly organized into dedicated directories.
 - **Album Artwork** — Save full-resolution covers, booklets, and discs into an `Images/` folder with toggle **I**.
 - **Audio Playback** — Stream songs directly inside the terminal with native pause/resume (**P**) and stop (**S**) controls on both Windows and Unix.
-- **Embedded Application Icon** — Native Windows icon embedded directly into the binary and console window.
 - **Quick Format Switch** — Toggle between lossless FLAC and MP3 on the fly with **Tab**.
 - **Configurable** — Customize templates, default audio format, and download destinations in `~/.khi-reloaded.yaml`.
 - **Cross-platform** — Native binaries for Linux, macOS, and Windows.
