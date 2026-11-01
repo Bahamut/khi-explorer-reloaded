@@ -1,10 +1,10 @@
 # KHI Explorer Reloaded
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/madLinux7/khi-explorer?style=flat-square)](https://go.dev/)
-[![Release](https://img.shields.io/github/v/release/madLinux7/khi-explorer?style=flat-square)](https://github.com/madLinux7/khi-explorer/releases)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/madLinux7/khi-explorer/release.yml?style=flat-square)](https://github.com/madLinux7/khi-explorer/actions)
-[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue?style=flat-square)](https://github.com/madLinux7/khi-explorer)
-[![License](https://img.shields.io/github/license/madLinux7/khi-explorer?style=flat-square)](https://github.com/madLinux7/khi-explorer/blob/main/LICENSE)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/Bahamut/khi-explorer-reloaded?style=flat-square)](https://go.dev/)
+[![Release](https://img.shields.io/github/v/release/Bahamut/khi-explorer-reloaded?style=flat-square)](https://github.com/Bahamut/khi-explorer-reloaded/releases)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/Bahamut/khi-explorer-reloaded/release.yml?style=flat-square)](https://github.com/Bahamut/khi-explorer-reloaded/actions)
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-blue?style=flat-square)](https://github.com/Bahamut/khi-explorer-reloaded)
+[![License](https://img.shields.io/github/license/Bahamut/khi-explorer-reloaded?style=flat-square)](https://github.com/Bahamut/khi-explorer-reloaded/blob/main/LICENSE)
 
 Standalone browser, player and bulk downloader for [KHInsider](https://downloads.khinsider.com).
 It CAN download entire album lists, **including the album art**, separated by folders and even **bulk download a full albums list from any publisher**.
@@ -22,12 +22,12 @@ Fully working since October 2026.
 - **Audio Playback** — Stream playback right from your terminal.
 - **Quick Format Switch** — Toggle between FLAC/MP3 inside the app.
 - **Quick Images Toggle** — Toggle Album Art downloads.
-- **Configurable** — Set your preferred format and download path in `~/.khi_explorer.yaml`
+- **Configurable** — Set your preferred format and download path in `~/.khi-reloaded.yaml`
 - **Cross-platform** — Use on Linux, macOS and Windows.
 ## Usage
 
 ```
-khi-explorer
+khi-reloaded
 ```
 
 ### Navigation
@@ -61,11 +61,11 @@ khi-explorer
 
 ### Configuration
 
-Configuration is stored at `~/.khi_explorer.yaml`:
+Configuration is stored at `~/.khi-reloaded.yaml`:
 
 ```yaml
 format: flac                         # Download format (flac, mp3)
-download_path: ~/Downloads/khi_explorer # Windows download destination
+download_path: ~/Downloads/khi-reloaded # Windows download destination
 download_images: true                # Save full-size album images in Images/
 track_filename_format: "{track_number} - {track_name}"
 album_folder_format: "{year} - {album_name}"
@@ -79,14 +79,14 @@ player: mpv                          # Audio player command
 ### Build from Source
 
 ```bash
-git clone https://github.com/bahamut/khi-explorer.git
-cd khi-explorer
-go build -o khi-explorer .
+git clone https://github.com/Bahamut/khi-explorer-reloaded.git
+cd khi-explorer-reloaded
+go build -o khi-reloaded .
 ```
 
 ## ✨ Acknowledgements ✨
 
 - [KHInsider](https://www.khinsider.com) — For hosting such an extensive collection of video game music
-- [madLinux7/khi-explorer](https://github.com/madLinux7/khi-explorer) — This project is a fork of his original khi-explorer mad work!!
+- [madLinux7/khi-explorer](https://github.com/madLinux7/khi-explorer) — Original project this fork is based on.
 - [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) — For the elegant TUI framework
 - [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) — For beautiful styling primitives

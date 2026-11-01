@@ -1,4 +1,4 @@
-module github.com/madLinux7/khi-explorer
+module github.com/Bahamut/khi-explorer-reloaded
 
 go 1.26.2
 

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/madLinux7/khi-explorer/config"
-	"github.com/madLinux7/khi-explorer/tui"
+	"github.com/Bahamut/khi-explorer-reloaded/config"
+	"github.com/Bahamut/khi-explorer-reloaded/tui"
 )
 
 func main() {
@@ -16,7 +16,7 @@ func main() {
 			os.Exit(0)
 		}
 		if arg == "-v" || arg == "--version" || arg == "version" {
-			fmt.Printf("khi-explorer version %s\n", Version)
+			fmt.Printf("khi-reloaded version %s\n", Version)
 			os.Exit(0)
 		}
 	}
@@ -41,10 +41,10 @@ func main() {
 var Version = "dev"
 
 func printHelp() {
-	helpText := fmt.Sprintf(`khi-explorer (v%s) - A fast, interactive TUI browser and downloader for KHInsider.
+helpText := fmt.Sprintf(`khi-reloaded (v%s) - A fast, interactive TUI browser and downloader for KHInsider.
 
 Usage:
-  khi-explorer [flags]
+  khi-reloaded [flags]
 
 Flags:
   -h, --help      Show this help overview
@@ -71,7 +71,7 @@ TUI Download Controls:
 
 Configuration:
   Settings path:  ~/.khi_explorer.yaml
-  Music folder:   ~/Downloads/khi_explorer/ (Windows default)
+  Music folder:   ~/Downloads/khi-reloaded/ (Windows default)
 `, Version)
 	fmt.Print(helpText)
 }

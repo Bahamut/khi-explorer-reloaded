@@ -20,7 +20,7 @@ type Config struct {
 
 func GetConfigPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".khi_explorer.yaml")
+	return filepath.Join(home, ".khi-reloaded.yaml")
 }
 
 func LoadConfig() (Config, error) {
@@ -57,13 +57,13 @@ func LoadConfig() (Config, error) {
 func defaultDownloadPath() string {
 	home := getHomeDir()
 	if runtime.GOOS == "windows" {
-		return filepath.Join(home, "Downloads", "khi_explorer")
+		return filepath.Join(home, "Downloads", "khi-reloaded")
 	}
-	return filepath.Join(home, "khi_explorer")
+	return filepath.Join(home, "khi-reloaded")
 }
 
 func legacyDownloadPath() string {
-	return filepath.Join(getHomeDir(), "khi_explorer")
+	return filepath.Join(getHomeDir(), "khi-reloaded")
 }
 
 func samePath(left, right string) bool {

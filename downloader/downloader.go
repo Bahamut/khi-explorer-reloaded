@@ -11,8 +11,8 @@ import (
 
 	fhttp "github.com/bogdanfinn/fhttp"
 
-	"github.com/madLinux7/khi-explorer/client"
-	"github.com/madLinux7/khi-explorer/config"
+	"github.com/Bahamut/khi-explorer-reloaded/client"
+	"github.com/Bahamut/khi-explorer-reloaded/config"
 )
 
 type DownloadProgress struct {

@@ -12,9 +12,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/madLinux7/khi-explorer/client"
-	"github.com/madLinux7/khi-explorer/config"
-	"github.com/madLinux7/khi-explorer/downloader"
+	"github.com/Bahamut/khi-explorer-reloaded/client"
+	"github.com/Bahamut/khi-explorer-reloaded/config"
+	"github.com/Bahamut/khi-explorer-reloaded/downloader"
 )
 
 // Design System / Colors

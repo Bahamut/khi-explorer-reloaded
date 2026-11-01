@@ -3,8 +3,8 @@ package downloader
 import (
 	"testing"
 
-	"github.com/madLinux7/khi-explorer/client"
-	"github.com/madLinux7/khi-explorer/config"
+	"github.com/Bahamut/khi-explorer-reloaded/client"
+	"github.com/Bahamut/khi-explorer-reloaded/config"
 )
 
 func TestImageFilenameDecodesAndDisambiguates(t *testing.T) {
