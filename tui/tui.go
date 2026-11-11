@@ -752,8 +752,14 @@ func (m mainModel) View() string {
 		if m.queueCount > 1 {
 			status += fmt.Sprintf(" [%d in queue]", m.queueCount-1)
 		}
+		if m.downloadInfo.Warning != "" {
+			status += " • ⚠ " + m.downloadInfo.Warning
+		}
 		if m.downloadInfo.Completed == m.downloadInfo.Total && m.queueCount == 0 {
 			status = "All downloads complete!"
+			if m.downloadInfo.Warning != "" {
+				status = fmt.Sprintf("All downloads complete! (⚠ %s)", m.downloadInfo.Warning)
+			}
 		}
 		progressStatus = "  " + downloadStyle.Render(status)
 		progressBarView = "  " + m.progressBar.View()
@@ -928,8 +934,12 @@ func (m mainModel) waitForDownload() tea.Cmd {
 }
 
 func (m mainModel) hideProgressCmd() tea.Cmd {
+	delay := 2 * time.Second
+	if m.downloadInfo.Warning != "" || len(m.downloadInfo.Warnings) > 0 {
+		delay = 5 * time.Second
+	}
 	return func() tea.Msg {
-		time.Sleep(2 * time.Second)
+		time.Sleep(delay)
 		return hideProgressMsg{}
 	}
 }

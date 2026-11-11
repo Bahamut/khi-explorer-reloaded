@@ -54,10 +54,11 @@ type Song struct {
 }
 
 type AlbumDetails struct {
-	Title  string
-	Year   string
-	Songs  []Song
-	Images []AlbumImage
+	Title   string
+	Year    string
+	InfoURL string
+	Songs   []Song
+	Images  []AlbumImage
 }
 
 // AlbumImage is a full-size image linked from an album page.
@@ -68,8 +69,9 @@ type AlbumImage struct {
 const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
 
 var (
-	yearPattern     = regexp.MustCompile(`(?:^|[^0-9])([12][0-9]{3})(?:[^0-9]|$)`)
-	pageYearPattern = regexp.MustCompile(`(?i)\bYear\s*:\s*([12][0-9]{3})\b`)
+	yearPattern            = regexp.MustCompile(`(?:^|[^0-9])([12][0-9]{3})(?:[^0-9]|$)`)
+	pageYearPattern        = regexp.MustCompile(`(?i)\bYear\s*:\s*([12][0-9]{3})\b`)
+	soundtracksRootPattern = regexp.MustCompile(`^(https?://[^/]+/soundtracks/[^/]+)`)
 )
 
 func NewClient() *Client {
@@ -616,10 +618,12 @@ func (c *Client) GetAlbumDetails(albumURL string) (AlbumDetails, error) {
 
 func parseAlbumDetails(doc *goquery.Document, albumURL string) AlbumDetails {
 	title := strings.TrimSpace(doc.Find("h2").First().Text())
+	images := extractAlbumImages(doc, albumURL)
 	details := AlbumDetails{
-		Title:  title,
-		Year:   extractAlbumYear(doc, albumURL, title),
-		Images: extractAlbumImages(doc, albumURL),
+		Title:   title,
+		Year:    extractAlbumYear(doc, albumURL, title),
+		InfoURL: extractAlbumInfoURL(doc, albumURL, images),
+		Images:  images,
 	}
 
 	// Find column indices dynamically using colspan tracking
@@ -814,28 +818,109 @@ func cleanIconText(text string) string {
 }
 
 func (c *Client) GetDownloadURL(songURL string, format string) (string, error) {
+	downloadURL, _, err := c.GetDownloadURLWithFallback(songURL, format)
+	return downloadURL, err
+}
+
+// GetDownloadURLWithFallback resolves a song page's audio file URL for the
+// requested format. If FLAC is requested and unavailable, it falls back to MP3
+// and returns fellBackToMP3 = true.
+func (c *Client) GetDownloadURLWithFallback(songURL string, format string) (string, bool, error) {
 	doc, err := c.doRequest(songURL)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
-	var downloadURL string
+	downloadURL, fellBackToMP3 := resolveSongDownloadURL(doc, format)
+	return downloadURL, fellBackToMP3, nil
+}
+
+func resolveSongDownloadURL(doc *goquery.Document, format string) (string, bool) {
+	var flacURL, mp3URL string
 	doc.Find("a").Each(func(i int, s *goquery.Selection) {
-		href := s.AttrOr("href", "")
-		if format == "flac" && strings.HasSuffix(strings.ToLower(href), ".flac") {
-			downloadURL = href
-		} else if format == "mp3" && strings.HasSuffix(strings.ToLower(href), ".mp3") && downloadURL == "" {
-			downloadURL = href
+		href := strings.TrimSpace(s.AttrOr("href", ""))
+		lower := strings.ToLower(href)
+		if strings.HasSuffix(lower, ".flac") && flacURL == "" {
+			flacURL = href
+		} else if strings.HasSuffix(lower, ".mp3") && mp3URL == "" {
+			mp3URL = href
 		}
 	})
 
-	if downloadURL == "" {
-		downloadURL = doc.Find("audio#audio").AttrOr("src", "")
+	audioSrc := strings.TrimSpace(doc.Find("audio#audio").AttrOr("src", ""))
+
+	var downloadURL string
+	fellBackToMP3 := false
+	if strings.EqualFold(format, "flac") {
+		if flacURL != "" {
+			downloadURL = flacURL
+		} else if mp3URL != "" {
+			downloadURL = mp3URL
+			fellBackToMP3 = true
+		} else if audioSrc != "" {
+			downloadURL = audioSrc
+			fellBackToMP3 = !strings.HasSuffix(strings.ToLower(audioSrc), ".flac")
+		}
+	} else {
+		if mp3URL != "" {
+			downloadURL = mp3URL
+		} else if audioSrc != "" {
+			downloadURL = audioSrc
+		} else if flacURL != "" {
+			downloadURL = flacURL
+		}
 	}
 
 	if downloadURL != "" && !strings.HasPrefix(downloadURL, "http") {
 		downloadURL = BaseURL + downloadURL
 	}
 
-	return downloadURL, nil
+	return downloadURL, fellBackToMP3
+}
+
+func extractAlbumInfoURL(doc *goquery.Document, albumURL string, images []AlbumImage) string {
+	var explicit string
+	doc.Find("a[href]").EachWithBreak(func(_ int, s *goquery.Selection) bool {
+		href := strings.TrimSpace(s.AttrOr("href", ""))
+		if strings.HasSuffix(strings.ToLower(href), "khinsider.info.txt") {
+			if resolved, ok := resolveImageURL(albumURL, href); ok {
+				explicit = resolved
+				return false
+			}
+		}
+		return true
+	})
+	if explicit != "" {
+		return explicit
+	}
+	for _, img := range images {
+		if u := DeriveAlbumInfoURL(img.URL); u != "" {
+			return u
+		}
+	}
+	return ""
+}
+
+// DeriveAlbumInfoURL derives the CDN URL of khinsider.info.txt from a full-size
+// album image URL or resolved song download URL.
+func DeriveAlbumInfoURL(assetURL string) string {
+	assetURL = strings.TrimSpace(assetURL)
+	if assetURL == "" {
+		return ""
+	}
+	if m := soundtracksRootPattern.FindStringSubmatch(assetURL); len(m) > 1 {
+		return m[1] + "/khinsider.info.txt"
+	}
+	parsed, err := url.Parse(assetURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	dir := strings.TrimRight(parsed.Path, "/")
+	if idx := strings.LastIndex(dir, "/"); idx >= 0 {
+		dir = dir[:idx]
+	}
+	parsed.Path = dir + "/khinsider.info.txt"
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String()
 }

@@ -15,7 +15,9 @@ It can download individual tracks, full albums, **album art (covers & booklets)*
 - **Smart Publisher Search** — Find publishers and labels even with partial names or single words.
 - **Multi-disc Management** — Automatically formats multi-CD albums with `{disk}.{track_number}` (e.g. `1.01 - Title`) or cleanly separates them into subdirectories (`CD1/01 - Title`, `CD2/...`) using the **F** key toggle.
 - **Bulk Downloads** — Download individual songs and full albums with **D**, or all albums listed on screen with **A**. Publisher bulk downloads are cleanly organized into dedicated directories.
+- **Album Metadata (`info.txt`)** — Full album downloads automatically fetch `khinsider.info.txt`, strip the promotional header lines, and save it as `info.txt` in the album root folder.
 - **Album Artwork** — Save full-resolution covers, booklets, and discs into an `Images/` folder with toggle **I**.
+- **Resilient Download Protections** — Automatically falls back to MP3 with an on-screen warning if a track lacks a FLAC version, and gracefully warns without aborting the download when an album has no cover images or no `khinsider.info.txt`.
 - **Audio Playback** — Stream songs directly inside the terminal with native pause/resume (**P**) and stop (**S**) controls on both Windows and Unix.
 - **Quick Format Switch** — Toggle between lossless FLAC and MP3 on the fly with **Tab**.
 - **Configurable** — Customize templates, default audio format, and download destinations in `~/.khi-reloaded.yaml`.

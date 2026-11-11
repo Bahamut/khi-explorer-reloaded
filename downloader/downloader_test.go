@@ -61,3 +61,19 @@ func TestDefaultAlbumFolderWithoutYear(t *testing.T) {
 		t.Errorf("album folder = %q, want %q", got, want)
 	}
 }
+
+func TestCleanInfoTxtRemovesHeaderAndOptionalBlankSecondLine(t *testing.T) {
+	withBlankSecondLine := "\xef\xbb\xbfThis file is downloaded from https://downloads.khinsider.com/game-soundtracks/album/test\r\n\r\nName: Test Album\r\nYear: 2009\r\n"
+	got := string(cleanInfoTxt([]byte(withBlankSecondLine)))
+	want := "Name: Test Album\r\nYear: 2009\r\n"
+	if got != want {
+		t.Errorf("cleanInfoTxt (blank 2nd line) = %q, want %q", got, want)
+	}
+
+	withNonBlankSecondLine := "This file is downloaded from https://downloads.khinsider.com/game-soundtracks/album/test\nName: Test Album\nYear: 2009\n"
+	got2 := string(cleanInfoTxt([]byte(withNonBlankSecondLine)))
+	want2 := "Name: Test Album\nYear: 2009\n"
+	if got2 != want2 {
+		t.Errorf("cleanInfoTxt (non-blank 2nd line) = %q, want %q", got2, want2)
+	}
+}

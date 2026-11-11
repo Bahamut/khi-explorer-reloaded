@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/url"
@@ -19,6 +20,8 @@ type DownloadProgress struct {
 	Total     int
 	Completed int
 	Current   string
+	Warning   string
+	Warnings  []string
 }
 
 type Downloader struct {
@@ -49,24 +52,36 @@ func (d *Downloader) DownloadSongForAlbumWithCallback(song client.Song, albumTit
 }
 
 func (d *Downloader) downloadSongWithCallback(song client.Song, albumFolder, downloadPath string, cb func(DownloadProgress)) error {
-	downloadURL, err := d.Client.GetDownloadURL(song.URL, d.Config.Format)
+	_, _, err := d.downloadSongInternal(song, albumFolder, downloadPath, cb)
+	return err
+}
+
+func (d *Downloader) downloadSongInternal(song client.Song, albumFolder, downloadPath string, cb func(DownloadProgress)) (string, bool, error) {
+	downloadURL, fellBackToMP3, err := d.Client.GetDownloadURLWithFallback(song.URL, d.Config.Format)
 	if err != nil {
-		return err
+		return "", false, err
 	}
 
 	if downloadURL == "" {
-		return fmt.Errorf("could not find download URL for %s", song.Title)
+		return "", false, fmt.Errorf("could not find download URL for %s", song.Title)
+	}
+
+	var warning string
+	var warnings []string
+	if fellBackToMP3 {
+		warning = "No FLAC available, downloading MP3"
+		warnings = []string{warning}
 	}
 
 	if cb != nil {
-		cb(DownloadProgress{Total: 1, Completed: 0, Current: song.Title})
+		cb(DownloadProgress{Total: 1, Completed: 0, Current: song.Title, Warning: warning, Warnings: warnings})
 	}
 
 	// Prepare path
 	downloadPath = expandHome(downloadPath)
 	albumPath := d.songOutputDir(filepath.Join(downloadPath, albumFolder), song)
 	if err := os.MkdirAll(albumPath, 0755); err != nil {
-		return err
+		return downloadURL, fellBackToMP3, err
 	}
 
 	// Determine filename
@@ -80,9 +95,9 @@ func (d *Downloader) downloadSongWithCallback(song client.Song, albumFolder, dow
 
 	err = d.downloadFile(downloadURL, filePath)
 	if err == nil && cb != nil {
-		cb(DownloadProgress{Total: 1, Completed: 1, Current: song.Title})
+		cb(DownloadProgress{Total: 1, Completed: 1, Current: song.Title, Warning: warning, Warnings: warnings})
 	}
-	return err
+	return downloadURL, fellBackToMP3, err
 }
 
 func (d *Downloader) songOutputDir(albumPath string, song client.Song) string {
@@ -128,50 +143,183 @@ func (d *Downloader) downloadAlbumWithCallback(albumURL, fallbackYear, downloadP
 	}
 
 	albumFolder := d.albumFolderName(details.Title, details.Year)
+	albumPath := filepath.Join(expandHome(downloadPath), albumFolder)
+	if err := os.MkdirAll(albumPath, 0755); err != nil {
+		return err
+	}
+
+	var warnings []string
+	seenWarnings := make(map[string]bool)
+	addWarning := func(w string) {
+		w = strings.TrimSpace(w)
+		if w == "" || seenWarnings[w] {
+			return
+		}
+		seenWarnings[w] = true
+		warnings = append(warnings, w)
+	}
+	latestWarning := func() string {
+		if len(warnings) == 0 {
+			return ""
+		}
+		return strings.Join(warnings, " | ")
+	}
+
 	total := len(details.Songs)
 	if d.Config.DownloadImages {
 		total += len(details.Images)
 	}
+	if total == 0 {
+		total = 1
+	}
+
+	infoURL := strings.TrimSpace(details.InfoURL)
+
 	for i, song := range details.Songs {
 		if cb != nil {
-			cb(DownloadProgress{Total: total, Completed: i, Current: song.Title})
+			cb(DownloadProgress{
+				Total:     total,
+				Completed: i,
+				Current:   song.Title,
+				Warning:   latestWarning(),
+				Warnings:  warnings,
+			})
 		}
-		if err := d.downloadSongWithCallback(song, albumFolder, downloadPath, nil); err != nil {
+		downloadURL, fellBackToMP3, err := d.downloadSongInternal(song, albumFolder, downloadPath, nil)
+		if infoURL == "" && downloadURL != "" {
+			infoURL = client.DeriveAlbumInfoURL(downloadURL)
+		}
+		if fellBackToMP3 {
+			addWarning("No FLAC available, downloading MP3")
+			if cb != nil {
+				cb(DownloadProgress{
+					Total:     total,
+					Completed: i,
+					Current:   song.Title,
+					Warning:   latestWarning(),
+					Warnings:  warnings,
+				})
+			}
+		}
+		if err != nil {
 			// Log error but continue
+			continue
 		}
 	}
 
 	if d.Config.DownloadImages {
-		// Every album download with image downloads enabled gets an Images
-		// directory, even if the source album does not have any images.
-		albumPath := filepath.Join(expandHome(downloadPath), albumFolder)
-		imagesPath := filepath.Join(albumPath, "Images")
-		if err := os.MkdirAll(imagesPath, 0755); err != nil {
-			return err
+		if len(details.Images) == 0 {
+			addWarning("No cover images found")
+		} else {
+			imagesPath := filepath.Join(albumPath, "Images")
+			if err := os.MkdirAll(imagesPath, 0755); err != nil {
+				addWarning("Could not create Images folder")
+			} else {
+				usedFilenames := make(map[string]int)
+				for i, image := range details.Images {
+					if infoURL == "" {
+						infoURL = client.DeriveAlbumInfoURL(image.URL)
+					}
+					filename := imageFilename(image.URL, i+1, usedFilenames)
+					if cb != nil {
+						cb(DownloadProgress{
+							Total:     total,
+							Completed: len(details.Songs) + i,
+							Current:   fmt.Sprintf("Image %d/%d: %s", i+1, len(details.Images), filename),
+							Warning:   latestWarning(),
+							Warnings:  warnings,
+						})
+					}
+					if err := d.downloadFile(image.URL, filepath.Join(imagesPath, filename)); err != nil {
+						addWarning("Some cover images could not be downloaded")
+						continue
+					}
+				}
+			}
 		}
+	}
 
-		usedFilenames := make(map[string]int)
-		for i, image := range details.Images {
-			filename := imageFilename(image.URL, i+1, usedFilenames)
-			if cb != nil {
-				cb(DownloadProgress{
-					Total:     total,
-					Completed: len(details.Songs) + i,
-					Current:   fmt.Sprintf("Image %d/%d: %s", i+1, len(details.Images), filename),
-				})
-			}
-			if err := d.downloadFile(image.URL, filepath.Join(imagesPath, filename)); err != nil {
-				// Match the existing album behaviour: keep downloading the remaining files.
-				continue
-			}
-		}
+	// Download khinsider.info.txt into the album root as info.txt (with the first 2 lines stripped).
+	if err := d.downloadAlbumInfoFile(infoURL, filepath.Join(albumPath, "info.txt")); err != nil {
+		addWarning("khinsider.info.txt not found")
 	}
 
 	if cb != nil {
-		cb(DownloadProgress{Total: total, Completed: total, Current: "Done"})
+		cb(DownloadProgress{
+			Total:     total,
+			Completed: total,
+			Current:   "Done",
+			Warning:   latestWarning(),
+			Warnings:  warnings,
+		})
 	}
 
 	return nil
+}
+
+func (d *Downloader) downloadAlbumInfoFile(infoURL, targetPath string) error {
+	infoURL = strings.TrimSpace(infoURL)
+	if infoURL == "" {
+		return fmt.Errorf("missing khinsider.info.txt URL")
+	}
+
+	raw, err := d.fetchBytes(infoURL)
+	if err != nil {
+		return err
+	}
+
+	cleaned := cleanInfoTxt(raw)
+	return os.WriteFile(targetPath, cleaned, 0644)
+}
+
+// cleanInfoTxt removes the first line (the KHInsider download header) and also
+// removes the second line if and only if the second line is blank.
+func cleanInfoTxt(raw []byte) []byte {
+	raw = bytes.TrimPrefix(raw, []byte("\xef\xbb\xbf"))
+	text := string(raw)
+	if text == "" {
+		return nil
+	}
+
+	lineEnding := "\n"
+	if strings.Contains(text, "\r\n") {
+		lineEnding = "\r\n"
+	}
+
+	normalized := strings.ReplaceAll(text, "\r\n", "\n")
+	lines := strings.Split(normalized, "\n")
+	if len(lines) <= 1 {
+		return []byte{}
+	}
+
+	// Always remove the first line; only remove the second line if it is blank.
+	rest := lines[1:]
+	if len(rest) > 0 && strings.TrimSpace(rest[0]) == "" {
+		rest = rest[1:]
+	}
+
+	return []byte(strings.Join(rest, lineEnding))
+}
+
+func (d *Downloader) fetchBytes(targetURL string) ([]byte, error) {
+	req, err := fhttp.NewRequest("GET", targetURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	d.Client.SetBrowserHeaders(req)
+	req.Header.Set("Referer", "https://downloads.khinsider.com/")
+
+	resp, err := d.Client.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("bad status: %s", resp.Status)
+	}
+
+	return io.ReadAll(resp.Body)
 }
 
 func (d *Downloader) trackFilename(song client.Song, extension string) string {

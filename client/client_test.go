@@ -176,3 +176,40 @@ func TestPublisherQueryWordsAndMatching(t *testing.T) {
 		t.Errorf("did not expect Capcom to match [levo lution]")
 	}
 }
+
+func TestResolveSongDownloadURLWithFallback(t *testing.T) {
+	mp3OnlyDoc, err := goquery.NewDocumentFromReader(strings.NewReader(`
+		<div id="pageContent">
+			<p><a href="https://vgmsite.com/soundtracks/example-ost/abc/01%20Track.mp3">Click here to download MP3</a></p>
+		</div>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	url, fellBack := resolveSongDownloadURL(mp3OnlyDoc, "flac")
+	if url != "https://vgmsite.com/soundtracks/example-ost/abc/01%20Track.mp3" || !fellBack {
+		t.Errorf("resolveSongDownloadURL(mp3Only, flac) = (%q, %v), want mp3 URL and fellBack=true", url, fellBack)
+	}
+
+	bothDoc, err := goquery.NewDocumentFromReader(strings.NewReader(`
+		<div id="pageContent">
+			<p><a href="https://vgmsite.com/soundtracks/example-ost/abc/01%20Track.mp3">Download MP3</a></p>
+			<p><a href="https://vgmsite.com/soundtracks/example-ost/abc/01%20Track.flac">Download FLAC</a></p>
+		</div>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	url, fellBack = resolveSongDownloadURL(bothDoc, "flac")
+	if url != "https://vgmsite.com/soundtracks/example-ost/abc/01%20Track.flac" || fellBack {
+		t.Errorf("resolveSongDownloadURL(both, flac) = (%q, %v), want flac URL and fellBack=false", url, fellBack)
+	}
+}
+
+func TestDeriveAlbumInfoURL(t *testing.T) {
+	got := DeriveAlbumInfoURL("https://eta.vgmtreasurechest.com/soundtracks/ragnarok-online-complete-soundtrack/abc123/1-01.%20Title.mp3")
+	want := "https://eta.vgmtreasurechest.com/soundtracks/ragnarok-online-complete-soundtrack/khinsider.info.txt"
+	if got != want {
+		t.Errorf("DeriveAlbumInfoURL = %q, want %q", got, want)
+	}
+}
